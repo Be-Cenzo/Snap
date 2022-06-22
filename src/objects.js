@@ -156,7 +156,8 @@ SpriteMorph.prototype.categories =
         'operators',
         'variables',
         'lists',
-        'other'
+        'other',
+        'KGQueries'
     ];
 
 SpriteMorph.prototype.blockColor = {
@@ -169,7 +170,8 @@ SpriteMorph.prototype.blockColor = {
     operators : new Color(98, 194, 19),
     variables : new Color(243, 118, 29),
     lists : new Color(217, 77, 17),
-    other: new Color(150, 150, 150)
+    other: new Color(150, 150, 150),
+    KGQueries: new Color(153, 0, 0)
 };
 
 SpriteMorph.prototype.customCategories = new Map(); // key: name, value: color
@@ -1357,6 +1359,43 @@ SpriteMorph.prototype.initBlocks = function () {
             type: 'command',
             category: 'other',
             spec: 'script variables %scriptVars'
+        },
+        
+        // KGQueries
+        salutaProva: {
+            type: 'reporter',
+            category: 'KGQueries',
+            spec: 'saluti a tutti'
+        },
+        salutaCustom: {
+            type: 'reporter',
+            category: 'KGQueries',
+            spec: 'ciao %s',
+            defaults: [localize('a tutti')]
+        },
+        commandProva: {
+            type: 'command',
+            category: 'KGQueries',
+            spec: 'inserisci var: %n',
+            defaults: [null]
+        },
+        subject: {
+            type: 'command',
+            category: 'KGQueries',
+            spec: 'soggetto: %s %c',
+            defaults: [null, null]
+        },
+        pattern: {
+            type: 'command',
+            category: 'KGQueries',
+            spec: 'predicato: %s oggetto: %s',
+            defaults: [null, null]
+        },
+        primaQuery: {
+            type: 'reporter',
+            category: 'KGQueries',
+            spec: 'select %exp from %s \nwhere %c',
+            defaults: [null, null, null]
         },
 
         // inheritance
@@ -2860,6 +2899,14 @@ SpriteMorph.prototype.blockTemplates = function (
             blocks.push('-');
             blocks.push(block('doShowTable'));
         }
+    } else if (category === 'KGQueries'){
+        blocks.push(block('salutaProva'));
+        blocks.push(block('salutaCustom'));
+        blocks.push(block('commandProva'));
+        blocks.push(block('subject'));
+        blocks.push(block('pattern'));
+        blocks.push(block('primaQuery'));
+
     }
 
     return blocks;
@@ -8005,6 +8052,177 @@ SpriteMorph.prototype.newSoundName = function (name, ignoredSound) {
     }
     return newName;
 };
+
+//KGQueries
+//blocchi di prova
+SpriteMorph.prototype.salutaProva = function () {
+    return 'Ciao a tutti';
+}
+
+
+SpriteMorph.prototype.salutaCustom = function (text) {
+    text = 'Ciao ' + text;
+    ide = world.children[0];
+    scene = ide.scene;
+    scene.globalVariables.addVar("Vincenzo", "Sei Forte");
+
+    return ide.getVar("Vincenzo");
+    return text;
+}
+
+SpriteMorph.prototype.commandProva = function (variabile) {
+    variabile = variabile + '!!!';
+    
+    console.log(this.scripts.children[0].nextBlock().nextBlock().nextBlock().inputs());
+    console.log(variabile);
+
+    nuovoBlocco = this.scripts.children[0].nextBlock().nextBlock().nextBlock();
+    nuovoBlocco.inputs().push('!!!');
+    nuovoBlocco.selectior = 'doSetVar';
+
+    JSCompiler.compileExpression(this.scripts.children[0].nextBlock().nextBlock().nextBlock());
+    
+    return variabile;
+}
+
+SpriteMorph.prototype.primaQuery = function (vars, url, block) {
+    try{
+        preapredUrl = prepareRequest(vars, url, block);
+    }
+    catch(e){
+        return e.message;
+    }
+    //preparedUrl = url + '?query=SELECT%20?item%20WHERE%20{?item%20wdt:P31%20wd:Q146.}&format=json'
+    /*result = fetch(preparedUrl)
+                .then(rs => rs.json())
+                .then(rs =>{
+                    list = new Table(2, 2);
+                    this.bubble(rs.results.bindings[0].item.value, false, false);
+                    list.set(rs.results.bindings[0].item.value, 1, 1);
+                    return list;
+                });*/
+    resultTable = new Table(2, 2);
+    result = new XMLHttpRequest();
+    result.open('GET', preparedUrl, true);
+    result.send(null);
+    result.onreadystatechange = function() {
+        if (this.readyState == 4 && this.status == 200) {
+            response = JSON.parse(result.responseText);
+            //cols = response.head.vars.length; non funziona bene
+            rows = response.results.bindings.length;
+            if(rows == 0){
+                block.showBubble(
+                    "Nessun risultato.",
+                    null,
+                    null
+                );
+                return;
+            }
+            
+            entry = Object.entries(response.results.bindings[0]);
+            cols = entry.length;
+            resultTable = new Table(cols, rows);
+            for(i = 0; i<cols; i++)
+                resultTable.setColName(i-1, entry[i][0]);
+            
+            for(i = 0; i<rows; i++){
+                for(j = 0; j<cols; j++){
+                    entry = Object.entries(response.results.bindings[i]);
+                    resultTable.set(entry[j][1].value, j+1, i+1);
+
+                }
+            }
+            console.log(result);
+            console.log(response);
+
+            // creazione di una variabile per il risultato
+            ide = world.children[0];
+            scene = ide.scene;
+            scene.globalVariables.addVar("Results", resultTable);
+
+            block.showBubble(
+                new TableFrameMorph(
+                    new TableMorph(resultTable, 10)
+                ),
+                null,
+                null
+                );
+       }
+       else if (this.readyState == 4 && this.status == 400) {
+            block.showBubble(
+                "La query non è corretta.",
+                null,
+                null
+            );
+        }
+    };
+    return "Caricamento...";
+}
+
+function UnvalidBlockException(message){
+    this.message = message;
+}
+
+//costruisce l'url della richiesta da eseguire a partire dall'url e la sequenza di blocchi al disotto del blocco della query
+prepareRequest = function(vars, url, block) {
+    preparedUrl = url + '?query=SELECT%20';
+
+    console.log(vars);
+    if(vars.contents.length > 0 && vars.contents[0] !== ''){
+        for(i = 0; i<vars.contents.length; i++){
+            preparedUrl += vars.contents[i] + '%20';
+        }
+    }
+    else
+        throw new UnvalidBlockException('Parametri della select non validi');
+    preparedUrl += 'WHERE%20{';
+
+    while(block !== null){
+        if(block.selector === 'subject'){
+            if(block.children[1].selector === undefined)
+                soggetto = block.children[1].children[0].text;
+            else    //si dovrebbe prendere il valore della variabile, non il nome
+                soggetto = block.children[1].children[0].text;
+            preparedUrl += soggetto +'%20';
+            inputs = block.inputs();
+            patternBlock = inputs[1].children[0];
+            if(patternBlock === undefined)
+                throw new UnvalidBlockException('I blocchi inseriti non sono validi');
+            do{
+                if(patternBlock.selector !== 'pattern')
+                    throw new UnvalidBlockException('I blocchi inseriti non sono validi');
+                predicato = patternBlock.children[1].children[0].text;
+                oggetto = patternBlock.children[3].children[0].text;
+                preparedUrl += predicato + '%20';
+                preparedUrl += oggetto;
+                patternBlock = patternBlock.nextBlock();
+                if(patternBlock !== null)
+                    preparedUrl += ';';
+                else
+                    preparedUrl += '.';
+            }while(patternBlock !== null);
+            /*while(patternBlock !== null){
+                predicato = patternBlock.children[1].children[0].text;
+                oggetto = patternBlock.children[3].children[0].text;
+                preparedUrl += predicato + '%20';
+                preparedUrl += oggetto;
+                patternBlock = patternBlock.nextBlock();
+                if(patternBlock !== null)
+                    preparedUrl += ';';
+                else
+                    preparedUrl += '.';
+            }*/
+        }
+        else {
+            throw new UnvalidBlockException('I blocchi inseriti non sono validi');
+        }
+        block = block.nextBlock();
+    }
+    preparedUrl += '%20SERVICE%20wikibase:label%20{bd:serviceParam%20wikibase:language%20"[AUTO_LANGUAGE],en"}}&format=json';
+    console.log(preparedUrl);
+    return preparedUrl;
+}
+
 
 // SpriteHighlightMorph /////////////////////////////////////////////////
 
