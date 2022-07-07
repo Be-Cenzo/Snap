@@ -1394,8 +1394,20 @@ SpriteMorph.prototype.initBlocks = function () {
         primaQuery: {
             type: 'reporter',
             category: 'KGQueries',
-            spec: 'select %exp from %s \nwhere %c',
+            spec: 'select %exp from %s %br where %c',
             defaults: [null, null, null]
+        },
+        showQueryResults:{
+            type: 'reporter',
+            category: 'KGQueries',
+            spec: 'show results %var',
+            defaults: [null]
+        },
+        getColumn:{
+            type: 'reporter',
+            category: 'KGQueries',
+            spec: 'get column %n from %var',
+            defaults: [1, null]
         },
 
         // inheritance
@@ -2906,7 +2918,8 @@ SpriteMorph.prototype.blockTemplates = function (
         blocks.push(block('subject'));
         blocks.push(block('pattern'));
         blocks.push(block('primaQuery'));
-
+        blocks.push(block('showQueryResults'));
+        blocks.push(block('getColumn'));
     }
 
     return blocks;
@@ -8064,7 +8077,20 @@ SpriteMorph.prototype.salutaCustom = function (text) {
     text = 'Ciao ' + text;
     ide = world.children[0];
     scene = ide.scene;
+    stage = this.parentThatIsA(StageMorph);
     scene.globalVariables.addVar("Vincenzo", "Sei Forte");
+    ide.flushBlocksCache('variables');
+    ide.refreshPalette();
+    watcher = this.findVariableWatcher("Vincenzo");
+    if (watcher !== null) {
+        watcher.show();
+        watcher.fixLayout(); // re-hide hidden parts
+        watcher.keepWithin(stage);
+        ide.flushBlocksCache('variables');
+        ide.refreshPalette();
+    }
+    else
+        this.toggleVariableWatcher("Vincenzo", true);
 
     return ide.getVar("Vincenzo");
     return text;
@@ -8105,58 +8131,81 @@ SpriteMorph.prototype.primaQuery = function (vars, url, block) {
     result = new XMLHttpRequest();
     result.open('GET', preparedUrl, true);
     result.send(null);
-    result.onreadystatechange = function() {
-        if (this.readyState == 4 && this.status == 200) {
-            response = JSON.parse(result.responseText);
-            //cols = response.head.vars.length; non funziona bene
-            rows = response.results.bindings.length;
-            if(rows == 0){
-                block.showBubble(
-                    "Nessun risultato.",
-                    null,
-                    null
-                );
-                return;
-            }
-            
-            entry = Object.entries(response.results.bindings[0]);
-            cols = entry.length;
-            resultTable = new Table(cols, rows);
-            for(i = 0; i<cols; i++)
-                resultTable.setColName(i-1, entry[i][0]);
-            
-            for(i = 0; i<rows; i++){
-                for(j = 0; j<cols; j++){
-                    entry = Object.entries(response.results.bindings[i]);
-                    resultTable.set(entry[j][1].value, j+1, i+1);
+    result.onreadystatechange = () => this.showResults(result, block);
+    return "Caricamento...";
+}
 
-                }
-            }
-            console.log(result);
-            console.log(response);
+SpriteMorph.prototype.createResultVar = function (varName, value){
+    ide = world.children[0];
+    scene = ide.scene;
+    stage = this.parentThatIsA(StageMorph);
+    scene.globalVariables.addVar(varName, value);
+    ide.flushBlocksCache('variables');
+    ide.refreshPalette();
+    watcher = this.findVariableWatcher(varName);
+    if (watcher !== null) {
+        watcher.show();
+        watcher.fixLayout(); // re-hide hidden parts
+        watcher.keepWithin(stage);
+        ide.flushBlocksCache('variables');
+        ide.refreshPalette();
+    }
+    else
+        this.toggleVariableWatcher(varName, true);
+}
 
-            // creazione di una variabile per il risultato
-            ide = world.children[0];
-            scene = ide.scene;
-            scene.globalVariables.addVar("Results", resultTable);
-
+//Handles readyState changes and showes query's results
+SpriteMorph.prototype.showResults = function (result, block){
+    if (result.readyState == 4 && result.status == 200) {
+        response = JSON.parse(result.responseText);
+        //cols = response.head.vars.length; non funziona bene
+        rows = response.results.bindings.length;
+        if(rows == 0){
             block.showBubble(
-                new TableFrameMorph(
-                    new TableMorph(resultTable, 10)
-                ),
-                null,
-                null
-                );
-       }
-       else if (this.readyState == 4 && this.status == 400) {
-            block.showBubble(
-                "La query non è corretta.",
+                "Nessun risultato.",
                 null,
                 null
             );
+            return;
         }
-    };
-    return "Caricamento...";
+        
+        entry = Object.entries(response.results.bindings[0]);
+        cols = entry.length;
+        resultTable = new Table(cols, rows);
+        for(i = 0; i<cols; i++)
+            resultTable.setColName(i-1, entry[i][0]);
+        
+        for(i = 0; i<rows; i++){
+            for(j = 0; j<cols; j++){
+                entry = Object.entries(response.results.bindings[i]);
+                resultTable.set(entry[j][1].value, j+1, i+1);
+
+            }
+        }
+        console.log(result);
+        console.log(response);
+
+        // creazione di una variabile per il risultato
+        /*ide = world.children[0];
+        scene = ide.scene;
+        scene.globalVariables.addVar("Results", resultTable);*/
+        queryResults = {
+            rows: rows,
+            cols: cols,
+            resultTable: resultTable
+        };
+        this.createResultVar("Results", queryResults);
+
+        tableDialogMorph = new TableDialogMorph(resultTable, 100, 100, 20);
+        tableDialogMorph.popUp(world);
+   }
+   else if (result.readyState == 4 && result.status == 400) {
+        block.showBubble(
+            "La query non è corretta.",
+            null,
+            null
+        );
+    }
 }
 
 function UnvalidBlockException(message){
@@ -8221,6 +8270,45 @@ prepareRequest = function(vars, url, block) {
     preparedUrl += '%20SERVICE%20wikibase:label%20{bd:serviceParam%20wikibase:language%20"[AUTO_LANGUAGE],en"}}&format=json';
     console.log(preparedUrl);
     return preparedUrl;
+}
+
+SpriteMorph.prototype.showQueryResults = function(varName){
+    ide = world.children[0];
+    queryResults = ide.getVar(varName);
+    console.log(queryResults);
+    //tableDialogMorph.popUp(world);
+    tableMorph = new TableMorph(queryResults.resultTable);
+    tableDialogMorph = new TableDialogMorph(
+        tableMorph.table,
+        tableMorph.globalColWidth,
+        tableMorph.colWidths,
+        tableMorph.rowHeight
+    ).popUp(this.world());
+    //tableMorph.openInDialog(); NON SO PERCHE' NON FUNZIONA!!!
+    console.log(tableMorph);
+    //tableDialogMorph.addBody(new TextMorph("Ciao bello"));
+    return null;
+}
+
+SpriteMorph.prototype.getColumn = function (index, varName){
+    ide = world.children[0];
+    queryResults = ide.getVar(varName);
+    table = queryResults.resultTable;
+    resultTable = new Table(1, queryResults.rows);
+    resultTable.setColName(-1, table.colName(index));
+
+    tableColumn = table.col(index);
+    for(i = 1; i<=queryResults.rows; i++){
+        resultTable.set(tableColumn[i-1], 1, i);
+    }
+    //resultTable.setCols(table.col(index), [table.colName(index)]);
+    console.log(table.col(index));
+    column = {
+        cols: 1,
+        rows: queryResults.rows,
+        resultTable: resultTable
+    };
+    return column;
 }
 
 
@@ -9543,6 +9631,16 @@ StageMorph.prototype.blockTemplates = function (
             blocks.push(block('doShowTable'));
         }
     }
+    if(category === 'KGQueries'){
+        blocks.push(block('salutaProva'));
+        blocks.push(block('salutaCustom'));
+        blocks.push(block('commandProva'));
+        blocks.push(block('subject'));
+        blocks.push(block('pattern'));
+        blocks.push(block('primaQuery'));
+        blocks.push(block('showQueryResults'));
+        blocks.push(block('getColumn'));
+    }
 
     return blocks;
 };
@@ -10125,6 +10223,29 @@ StageMorph.prototype.mouseScroll
 
 StageMorph.prototype.receiveUserInteraction
     = SpriteMorph.prototype.receiveUserInteraction;
+
+// StageMorph KGQueries blocks
+
+StageMorph.prototype.salutaProva 
+    = SpriteMorph.prototype.salutaProva;
+
+StageMorph.prototype.salutaCustom 
+    = SpriteMorph.prototype.salutaCustom;
+
+StageMorph.prototype.primaQuery 
+    = SpriteMorph.prototype.primaQuery;
+
+StageMorph.prototype.createResultVar 
+    = SpriteMorph.prototype.createResultVar;
+
+StageMorph.prototype.showResults 
+    = SpriteMorph.prototype.showResults;
+
+StageMorph.prototype.showQueryResults 
+    = SpriteMorph.prototype.showQueryResults;
+
+StageMorph.prototype.getColumn 
+    = SpriteMorph.prototype.getColumn;
 
 // StageMorph custom blocks
 
