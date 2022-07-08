@@ -1409,6 +1409,12 @@ SpriteMorph.prototype.initBlocks = function () {
             spec: 'get column %n from %var',
             defaults: [1, null]
         },
+        getRow:{
+            type: 'reporter',
+            category: 'KGQueries',
+            spec: 'get row %n from %var',
+            defaults: [1, null]
+        },
 
         // inheritance
         doDeleteAttr: {
@@ -2920,6 +2926,7 @@ SpriteMorph.prototype.blockTemplates = function (
         blocks.push(block('primaQuery'));
         blocks.push(block('showQueryResults'));
         blocks.push(block('getColumn'));
+        blocks.push(block('getRow'));
     }
 
     return blocks;
@@ -8293,11 +8300,15 @@ SpriteMorph.prototype.showQueryResults = function(varName){
 SpriteMorph.prototype.getColumn = function (index, varName){
     ide = world.children[0];
     queryResults = ide.getVar(varName);
+    if(typeof(index) !== 'number')
+        return queryResults;
     table = queryResults.resultTable;
     resultTable = new Table(1, queryResults.rows);
     resultTable.setColName(-1, table.colName(index));
 
     tableColumn = table.col(index);
+    if(!tableColumn)
+        return null;
     for(i = 1; i<=queryResults.rows; i++){
         resultTable.set(tableColumn[i-1], 1, i);
     }
@@ -8309,6 +8320,31 @@ SpriteMorph.prototype.getColumn = function (index, varName){
         resultTable: resultTable
     };
     return column;
+}
+
+SpriteMorph.prototype.getRow = function (index, varName){
+    ide = world.children[0];
+    queryResults = ide.getVar(varName);
+    if(typeof(index) !== 'number')
+        return queryResults;
+    table = queryResults.resultTable;
+    resultTable = new Table(queryResults.cols, 1);
+    resultTable.setColNames(table.columnNames());
+
+    tableRow = table.row(index);
+    if(!tableRow)
+        return null;
+    for(i = 1; i<=queryResults.cols; i++){
+        resultTable.set(tableRow[i-1], i, 1);
+    }
+    //resultTable.setCols(table.col(index), [table.colName(index)]);
+    console.log(table.row(index));
+    row = {
+        cols: queryResults.cols,
+        rows: 1,
+        resultTable: resultTable
+    };
+    return row;
 }
 
 
@@ -9640,6 +9676,7 @@ StageMorph.prototype.blockTemplates = function (
         blocks.push(block('primaQuery'));
         blocks.push(block('showQueryResults'));
         blocks.push(block('getColumn'));
+        blocks.push(block('getRow'));
     }
 
     return blocks;
@@ -10246,6 +10283,9 @@ StageMorph.prototype.showQueryResults
 
 StageMorph.prototype.getColumn 
     = SpriteMorph.prototype.getColumn;
+
+StageMorph.prototype.getRow 
+    = SpriteMorph.prototype.getRow;
 
 // StageMorph custom blocks
 
