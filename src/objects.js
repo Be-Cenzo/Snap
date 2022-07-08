@@ -1415,6 +1415,12 @@ SpriteMorph.prototype.initBlocks = function () {
             spec: 'get row %n from %var',
             defaults: [1, null]
         },
+        searchEntity:{
+            type: 'reporter',
+            category: 'KGQueries',
+            spec: 'search entity: %s',
+            defaults: [1, null]
+        },
 
         // inheritance
         doDeleteAttr: {
@@ -2927,6 +2933,7 @@ SpriteMorph.prototype.blockTemplates = function (
         blocks.push(block('showQueryResults'));
         blocks.push(block('getColumn'));
         blocks.push(block('getRow'));
+        blocks.push(block('searchEntity'));
     }
 
     return blocks;
@@ -8347,6 +8354,17 @@ SpriteMorph.prototype.getRow = function (index, varName){
     return row;
 }
 
+SpriteMorph.prototype.searchEntity = function(search) {
+    requestUrl = "https://www.wikidata.org/w/api.php?action=wbsearchentities&language=en&type=item&format=json&origin=*&search=" + search;
+    result = new XMLHttpRequest();
+    result.open('GET', requestUrl, true);
+    result.send(null);
+    result.onreadystatechange = () => {
+        json = JSON.parse(result.response);
+        console.log(json);
+    }
+}
+
 
 // SpriteHighlightMorph /////////////////////////////////////////////////
 
@@ -9677,6 +9695,7 @@ StageMorph.prototype.blockTemplates = function (
         blocks.push(block('showQueryResults'));
         blocks.push(block('getColumn'));
         blocks.push(block('getRow'));
+        blocks.push(block('searchEntity'));
     }
 
     return blocks;
@@ -10286,6 +10305,9 @@ StageMorph.prototype.getColumn
 
 StageMorph.prototype.getRow 
     = SpriteMorph.prototype.getRow;
+
+StageMorph.prototype.searchEntity 
+    = SpriteMorph.prototype.searchEntity;
 
 // StageMorph custom blocks
 
