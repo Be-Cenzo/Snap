@@ -1371,7 +1371,7 @@ SpriteMorph.prototype.initBlocks = function () {
             type: 'reporter',
             category: 'KGQueries',
             spec: 'ciao %s',
-            defaults: [localize('a tutti')]
+            defaults: ['a tutti']
         },
         commandProva: {
             type: 'command',
@@ -1382,20 +1382,20 @@ SpriteMorph.prototype.initBlocks = function () {
         subject: {
             type: 'command',
             category: 'KGQueries',
-            spec: 'soggetto: %s %c',
+            spec: 'subject: %s %c',
             defaults: [null, null]
         },
         pattern: {
             type: 'command',
             category: 'KGQueries',
-            spec: 'predicato: %s oggetto: %s',
+            spec: 'predicate: %s object: %s',
             defaults: [null, null]
         },
         primaQuery: {
             type: 'reporter',
             category: 'KGQueries',
             spec: 'select %exp from %s %br where %c',
-            defaults: [null, null, null]
+            defaults: [null, 'https://query.wikidata.org/sparql', null]
         },
         showQueryResults:{
             type: 'reporter',
@@ -1418,8 +1418,14 @@ SpriteMorph.prototype.initBlocks = function () {
         searchEntity:{
             type: 'reporter',
             category: 'KGQueries',
-            spec: 'search entity: %s',
-            defaults: [1, null]
+            spec: 'search an entity: %s',
+            defaults: ['something']
+        },
+        searchProperty:{
+            type: 'reporter',
+            category: 'KGQueries',
+            spec: 'search a property: %s',
+            defaults: ['something']
         },
 
         // inheritance
@@ -2934,6 +2940,7 @@ SpriteMorph.prototype.blockTemplates = function (
         blocks.push(block('getColumn'));
         blocks.push(block('getRow'));
         blocks.push(block('searchEntity'));
+        blocks.push(block('searchProperty'));
     }
 
     return blocks;
@@ -8355,14 +8362,22 @@ SpriteMorph.prototype.getRow = function (index, varName){
 }
 
 SpriteMorph.prototype.searchEntity = function(search) {
-    requestUrl = "https://www.wikidata.org/w/api.php?action=wbsearchentities&language=en&type=item&format=json&origin=*&search=" + search;
-    result = new XMLHttpRequest();
-    result.open('GET', requestUrl, true);
-    result.send(null);
-    result.onreadystatechange = () => {
-        json = JSON.parse(result.response);
-        console.log(json);
-    }
+    endpoint = new WikiDataEndpoint('it', this);
+    endpoint.searchEntity(search, 'item');
+}
+
+SpriteMorph.prototype.searchProperty = function(search) {
+    endpoint = new WikiDataEndpoint('it', this);
+    endpoint.searchEntity(search, 'property');
+}
+
+SpriteMorph.prototype.showSearchResults = function(varName){
+    ide = world.children[0];
+    searchResults = ide.getVar(varName);
+    dialogBox = new DialogBoxMorph();
+    description = searchResults.label + '\n' + searchResults.description + '\n' + searchResults.concepturi;
+    dialogBox.inform('Search Results', description, world);
+    return null;
 }
 
 
@@ -9696,6 +9711,7 @@ StageMorph.prototype.blockTemplates = function (
         blocks.push(block('getColumn'));
         blocks.push(block('getRow'));
         blocks.push(block('searchEntity'));
+        blocks.push(block('searchProperty'));
     }
 
     return blocks;
@@ -10308,6 +10324,9 @@ StageMorph.prototype.getRow
 
 StageMorph.prototype.searchEntity 
     = SpriteMorph.prototype.searchEntity;
+
+StageMorph.prototype.searchProperty 
+    = SpriteMorph.prototype.searchProperty;
 
 // StageMorph custom blocks
 
