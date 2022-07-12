@@ -8091,7 +8091,7 @@ SpriteMorph.prototype.newSoundName = function (name, ignoredSound) {
 //blocchi di prova
 SpriteMorph.prototype.salutaProva = function () {
     return 'Ciao a tutti';
-}
+};
 
 
 SpriteMorph.prototype.salutaCustom = function (text) {
@@ -8115,7 +8115,7 @@ SpriteMorph.prototype.salutaCustom = function (text) {
 
     return ide.getVar("Vincenzo");
     return text;
-}
+};
 
 SpriteMorph.prototype.commandProva = function (variabile) {
     variabile = variabile + '!!!';
@@ -8130,31 +8130,22 @@ SpriteMorph.prototype.commandProva = function (variabile) {
     JSCompiler.compileExpression(this.scripts.children[0].nextBlock().nextBlock().nextBlock());
     
     return variabile;
-}
+};
 
 SpriteMorph.prototype.primaQuery = function (vars, url, block) {
     try{
-        preapredUrl = prepareRequest(vars, url, block);
+        preparedUrl = prepareRequest(vars, url, block);
     }
     catch(e){
         return e.message;
     }
-    //preparedUrl = url + '?query=SELECT%20?item%20WHERE%20{?item%20wdt:P31%20wd:Q146.}&format=json'
-    /*result = fetch(preparedUrl)
-                .then(rs => rs.json())
-                .then(rs =>{
-                    list = new Table(2, 2);
-                    this.bubble(rs.results.bindings[0].item.value, false, false);
-                    list.set(rs.results.bindings[0].item.value, 1, 1);
-                    return list;
-                });*/
     resultTable = new Table(2, 2);
     result = new XMLHttpRequest();
     result.open('GET', preparedUrl, true);
     result.send(null);
     result.onreadystatechange = () => this.showResults(result, block);
     return "Caricamento...";
-}
+};
 
 SpriteMorph.prototype.createResultVar = function (varName, value){
     ide = world.children[0];
@@ -8173,7 +8164,7 @@ SpriteMorph.prototype.createResultVar = function (varName, value){
     }
     else
         this.toggleVariableWatcher(varName, true);
-}
+};
 
 //Handles readyState changes and showes query's results
 SpriteMorph.prototype.showResults = function (result, block){
@@ -8216,9 +8207,7 @@ SpriteMorph.prototype.showResults = function (result, block){
             resultTable: resultTable
         };
         this.createResultVar("Results", queryResults);
-
-        tableDialogMorph = new TableDialogMorph(resultTable, 100, 100, 20);
-        tableDialogMorph.popUp(world);
+        this.showQueryResults("Results");
    }
    else if (result.readyState == 4 && result.status == 400) {
         block.showBubble(
@@ -8227,33 +8216,40 @@ SpriteMorph.prototype.showResults = function (result, block){
             null
         );
     }
-}
+};
 
 function UnvalidBlockException(message){
     this.message = message;
-}
+};
 
 //costruisce l'url della richiesta da eseguire a partire dall'url e la sequenza di blocchi al disotto del blocco della query
 prepareRequest = function(vars, url, block) {
-    preparedUrl = url + '?query=SELECT%20';
+    /*preparedUrl = url + '?query=SELECT ';
 
     console.log(vars);
     if(vars.contents.length > 0 && vars.contents[0] !== ''){
         for(i = 0; i<vars.contents.length; i++){
-            preparedUrl += vars.contents[i] + '%20';
+            preparedUrl += vars.contents[i] + ' ';
         }
     }
     else
         throw new UnvalidBlockException('Parametri della select non validi');
-    preparedUrl += 'WHERE%20{';
+    preparedUrl += 'WHERE {';*/
 
-    while(block !== null){
+    endpoint = new WikiDataEndpoint('it', this);
+    query = new Query(vars, endpoint, block);
+    console.log('query');
+    console.log(query);
+    /*sub = new Subject(block);
+    console.log(sub);*/
+
+    /*while(block !== null){
         if(block.selector === 'subject'){
             if(block.children[1].selector === undefined)
                 soggetto = block.children[1].children[0].text;
             else    //si dovrebbe prendere il valore della variabile, non il nome
                 soggetto = block.children[1].children[0].text;
-            preparedUrl += soggetto +'%20';
+            preparedUrl += soggetto +' ';
             inputs = block.inputs();
             patternBlock = inputs[1].children[0];
             if(patternBlock === undefined)
@@ -8263,7 +8259,7 @@ prepareRequest = function(vars, url, block) {
                     throw new UnvalidBlockException('I blocchi inseriti non sono validi');
                 predicato = patternBlock.children[1].children[0].text;
                 oggetto = patternBlock.children[3].children[0].text;
-                preparedUrl += predicato + '%20';
+                preparedUrl += predicato + ' ';
                 preparedUrl += oggetto;
                 patternBlock = patternBlock.nextBlock();
                 if(patternBlock !== null)
@@ -8281,17 +8277,18 @@ prepareRequest = function(vars, url, block) {
                     preparedUrl += ';';
                 else
                     preparedUrl += '.';
-            }*/
+            }*//*
         }
         else {
             throw new UnvalidBlockException('I blocchi inseriti non sono validi');
         }
         block = block.nextBlock();
     }
-    preparedUrl += '%20SERVICE%20wikibase:label%20{bd:serviceParam%20wikibase:language%20"[AUTO_LANGUAGE],en"}}&format=json';
+    preparedUrl += ' SERVICE wikibase:label {bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en"}}&format=json';
     console.log(preparedUrl);
-    return preparedUrl;
-}
+    return preparedUrl;*/
+    return query.prepareRequest();
+};
 
 SpriteMorph.prototype.showQueryResults = function(varName){
     ide = world.children[0];
@@ -8309,7 +8306,7 @@ SpriteMorph.prototype.showQueryResults = function(varName){
     console.log(tableMorph);
     //tableDialogMorph.addBody(new TextMorph("Ciao bello"));
     return null;
-}
+};
 
 SpriteMorph.prototype.getColumn = function (index, varName){
     ide = world.children[0];
@@ -8334,7 +8331,7 @@ SpriteMorph.prototype.getColumn = function (index, varName){
         resultTable: resultTable
     };
     return column;
-}
+};
 
 SpriteMorph.prototype.getRow = function (index, varName){
     ide = world.children[0];
@@ -8359,17 +8356,17 @@ SpriteMorph.prototype.getRow = function (index, varName){
         resultTable: resultTable
     };
     return row;
-}
+};
 
 SpriteMorph.prototype.searchEntity = function(search) {
     endpoint = new WikiDataEndpoint('it', this);
     endpoint.searchEntity(search, 'item');
-}
+};
 
 SpriteMorph.prototype.searchProperty = function(search) {
     endpoint = new WikiDataEndpoint('it', this);
     endpoint.searchEntity(search, 'property');
-}
+};
 
 SpriteMorph.prototype.showSearchResults = function(varName){
     ide = world.children[0];
@@ -8378,7 +8375,7 @@ SpriteMorph.prototype.showSearchResults = function(varName){
     description = searchResults.label + '\n' + searchResults.description + '\n' + searchResults.concepturi;
     dialogBox.inform('Search Results', description, world);
     return null;
-}
+};
 
 
 // SpriteHighlightMorph /////////////////////////////////////////////////
