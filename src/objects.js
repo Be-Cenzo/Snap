@@ -1427,6 +1427,12 @@ SpriteMorph.prototype.initBlocks = function () {
             spec: 'search a property: %s',
             defaults: ['something']
         },
+        translateQueryBlock:{
+            type: 'reporter',
+            category: 'KGQueries',
+            spec: 'translate query block: %block',
+            defaults: [null]
+        },
 
         // inheritance
         doDeleteAttr: {
@@ -2941,6 +2947,7 @@ SpriteMorph.prototype.blockTemplates = function (
         blocks.push(block('getRow'));
         blocks.push(block('searchEntity'));
         blocks.push(block('searchProperty'));
+        blocks.push(block('translateQueryBlock'));
     }
 
     return blocks;
@@ -8147,6 +8154,8 @@ SpriteMorph.prototype.primaQuery = function (vars, url, block) {
     return "Caricamento...";
 };
 
+// Creates a global variable named with de value of varName and containing value
+// it also adds a watcher to the stage
 SpriteMorph.prototype.createResultVar = function (varName, value){
     ide = world.children[0];
     scene = ide.scene;
@@ -8170,7 +8179,6 @@ SpriteMorph.prototype.createResultVar = function (varName, value){
 SpriteMorph.prototype.showResults = function (result, block){
     if (result.readyState == 4 && result.status == 200) {
         response = JSON.parse(result.responseText);
-        //cols = response.head.vars.length; non funziona bene
         rows = response.results.bindings.length;
         if(rows == 0){
             block.showBubble(
@@ -8197,10 +8205,6 @@ SpriteMorph.prototype.showResults = function (result, block){
         console.log(result);
         console.log(response);
 
-        // creazione di una variabile per il risultato
-        /*ide = world.children[0];
-        scene = ide.scene;
-        scene.globalVariables.addVar("Results", resultTable);*/
         queryResults = {
             rows: rows,
             cols: cols,
@@ -8222,79 +8226,20 @@ function UnvalidBlockException(message){
     this.message = message;
 };
 
-//costruisce l'url della richiesta da eseguire a partire dall'url e la sequenza di blocchi al disotto del blocco della query
+//builds the request url starting from the first block
 prepareRequest = function(vars, url, block) {
-    /*preparedUrl = url + '?query=SELECT ';
-
-    console.log(vars);
-    if(vars.contents.length > 0 && vars.contents[0] !== ''){
-        for(i = 0; i<vars.contents.length; i++){
-            preparedUrl += vars.contents[i] + ' ';
-        }
-    }
-    else
-        throw new UnvalidBlockException('Parametri della select non validi');
-    preparedUrl += 'WHERE {';*/
-
     endpoint = new WikiDataEndpoint('it', this);
     query = new Query(vars, endpoint, block);
     console.log('query');
     console.log(query);
-    /*sub = new Subject(block);
-    console.log(sub);*/
-
-    /*while(block !== null){
-        if(block.selector === 'subject'){
-            if(block.children[1].selector === undefined)
-                soggetto = block.children[1].children[0].text;
-            else    //si dovrebbe prendere il valore della variabile, non il nome
-                soggetto = block.children[1].children[0].text;
-            preparedUrl += soggetto +' ';
-            inputs = block.inputs();
-            patternBlock = inputs[1].children[0];
-            if(patternBlock === undefined)
-                throw new UnvalidBlockException('I blocchi inseriti non sono validi');
-            do{
-                if(patternBlock.selector !== 'pattern')
-                    throw new UnvalidBlockException('I blocchi inseriti non sono validi');
-                predicato = patternBlock.children[1].children[0].text;
-                oggetto = patternBlock.children[3].children[0].text;
-                preparedUrl += predicato + ' ';
-                preparedUrl += oggetto;
-                patternBlock = patternBlock.nextBlock();
-                if(patternBlock !== null)
-                    preparedUrl += ';';
-                else
-                    preparedUrl += '.';
-            }while(patternBlock !== null);
-            /*while(patternBlock !== null){
-                predicato = patternBlock.children[1].children[0].text;
-                oggetto = patternBlock.children[3].children[0].text;
-                preparedUrl += predicato + '%20';
-                preparedUrl += oggetto;
-                patternBlock = patternBlock.nextBlock();
-                if(patternBlock !== null)
-                    preparedUrl += ';';
-                else
-                    preparedUrl += '.';
-            }*//*
-        }
-        else {
-            throw new UnvalidBlockException('I blocchi inseriti non sono validi');
-        }
-        block = block.nextBlock();
-    }
-    preparedUrl += ' SERVICE wikibase:label {bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en"}}&format=json';
-    console.log(preparedUrl);
-    return preparedUrl;*/
     return query.prepareRequest();
 };
 
+//shows query results saved inside varName
 SpriteMorph.prototype.showQueryResults = function(varName){
     ide = world.children[0];
     queryResults = ide.getVar(varName);
     console.log(queryResults);
-    //tableDialogMorph.popUp(world);
     tableMorph = new TableMorph(queryResults.resultTable);
     tableDialogMorph = new TableDialogMorph(
         tableMorph.table,
@@ -8302,12 +8247,11 @@ SpriteMorph.prototype.showQueryResults = function(varName){
         tableMorph.colWidths,
         tableMorph.rowHeight
     ).popUp(this.world());
-    //tableMorph.openInDialog(); NON SO PERCHE' NON FUNZIONA!!!
     console.log(tableMorph);
-    //tableDialogMorph.addBody(new TextMorph("Ciao bello"));
     return null;
 };
 
+// Allow the user to get a single column from a query result
 SpriteMorph.prototype.getColumn = function (index, varName){
     ide = world.children[0];
     queryResults = ide.getVar(varName);
@@ -8323,7 +8267,6 @@ SpriteMorph.prototype.getColumn = function (index, varName){
     for(i = 1; i<=queryResults.rows; i++){
         resultTable.set(tableColumn[i-1], 1, i);
     }
-    //resultTable.setCols(table.col(index), [table.colName(index)]);
     console.log(table.col(index));
     column = {
         cols: 1,
@@ -8333,6 +8276,7 @@ SpriteMorph.prototype.getColumn = function (index, varName){
     return column;
 };
 
+// Allow the user to get a single row from a query result
 SpriteMorph.prototype.getRow = function (index, varName){
     ide = world.children[0];
     queryResults = ide.getVar(varName);
@@ -8348,7 +8292,6 @@ SpriteMorph.prototype.getRow = function (index, varName){
     for(i = 1; i<=queryResults.cols; i++){
         resultTable.set(tableRow[i-1], i, 1);
     }
-    //resultTable.setCols(table.col(index), [table.colName(index)]);
     console.log(table.row(index));
     row = {
         cols: queryResults.cols,
@@ -8358,16 +8301,19 @@ SpriteMorph.prototype.getRow = function (index, varName){
     return row;
 };
 
+// Allow the user to search for an entity in a knowledge graph
 SpriteMorph.prototype.searchEntity = function(search) {
     endpoint = new WikiDataEndpoint('it', this);
     endpoint.searchEntity(search, 'item');
 };
 
+// Allow the user to search for a property in a knowledge graph
 SpriteMorph.prototype.searchProperty = function(search) {
     endpoint = new WikiDataEndpoint('it', this);
     endpoint.searchEntity(search, 'property');
 };
 
+// show search results saved inside varName
 SpriteMorph.prototype.showSearchResults = function(varName){
     ide = world.children[0];
     searchResults = ide.getVar(varName);
@@ -8375,6 +8321,16 @@ SpriteMorph.prototype.showSearchResults = function(varName){
     description = searchResults.label + '\n' + searchResults.description + '\n' + searchResults.concepturi;
     dialogBox.inform('Search Results', description, world);
     return null;
+};
+
+SpriteMorph.prototype.translateQueryBlock = function(block) {
+    /*if(block.blockSpec !== 'primaQuery')
+        return 'You can translate only query blocks';*/
+        console.log('ciaoneeee');
+    console.log(block.blockSpec);
+    //endpoint = new WikiDataEndpoint('it', this);
+    //endpoint.searchEntity(search, 'property');
+    return '';
 };
 
 
@@ -9709,6 +9665,7 @@ StageMorph.prototype.blockTemplates = function (
         blocks.push(block('getRow'));
         blocks.push(block('searchEntity'));
         blocks.push(block('searchProperty'));
+        blocks.push(block('translateQueryBlock'));
     }
 
     return blocks;
@@ -10324,6 +10281,9 @@ StageMorph.prototype.searchEntity
 
 StageMorph.prototype.searchProperty 
     = SpriteMorph.prototype.searchProperty;
+    
+StageMorph.prototype.translateQueryBlock 
+    = SpriteMorph.prototype.translateQueryBlock;
 
 // StageMorph custom blocks
 

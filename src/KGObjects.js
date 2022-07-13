@@ -13,6 +13,7 @@
 
         Endpoint
         WikiDataEndpoint
+        Pattern
         Subject
         Query
 
@@ -35,6 +36,7 @@ var SnapVersion = '7.4.0-dev';
 
 var Endpoint;
 var WikiDataEndpoint;
+var pattern;
 var Subject;
 var Query;
 
@@ -71,7 +73,9 @@ function WikiDataEndpoint(language, morph){
 WikiDataEndpoint.prototype.init = function(language, morph){
     this.baseUrl = 'https://query.wikidata.org/sparql';
     this.language = language;
-    this.morph = morph; // is a SpriteMorph or a StageMorph (if the block is used on a Sprite or a Stage) ma in realtà poi è la window
+    this.morph = morph; // is a SpriteMorph or a StageMorph (if the block is used on a Sprite or a Stage)
+    this.entityPrefix = 'wd:';
+    this.propertyPrefix = 'wdt:';
 };
 
 WikiDataEndpoint.prototype.searchEntity = function(search, type){
@@ -102,34 +106,64 @@ WikiDataEndpoint.prototype.searchEntity = function(search, type){
     }
 };
 
+// Pattern ///////////////////////////////////////////////////////////
+
+Pattern.prototype.constructor = Pattern;
+
+function Pattern(block, endpoint){
+    this.block = block;
+    this.endpoint = endpoint;
+    this.propertyValue = this.getSlotValue(1);
+    this.entityValue = this.getSlotValue(3);
+}
+
+//index is the slot's position index which we want to get the value
+Pattern.prototype.getSlotValue = function(index){
+    let slot = this.block.children[index];
+    if(slot.category === 'variables'){
+        let varName = slot.blockSpec;
+        let ide = world.children[0];
+        let variable = ide.getVar(varName);
+        if(variable.type === 'entity')
+            return this.endpoint.entityPrefix + variable.id;
+        if(variable.type === 'property')
+            return this.endpoint.propertyPrefix + variable.id;
+        return variable;
+    }
+    else return slot.children[0].text;
+}
 
 // Subject ///////////////////////////////////////////////////////////
 
 Subject.prototype.constructor = Subject;
 
-function Subject(rootBlock){
+function Subject(rootBlock, endpoint){
     this.rootBlock = rootBlock;
+    this.endpoint = endpoint;
     this.patternBlocks = [];
-    inputs = rootBlock.inputs(); //da controllare
+    this.varValue = this.getSlotValue();
+    inputs = rootBlock.inputs();
     let block = inputs[1].children[0];
     while(block){
         if(block.selector !== 'pattern'){
             this.patternBlocks = [];
                 throw new UnvalidBlockException('I blocchi inseriti non sono validi');
         }
-        this.patternBlocks.push(block);
+        let pattern = new Pattern(block, endpoint);
+        this.patternBlocks.push(pattern);
         block = block.nextBlock();
     }
 };
 
 Subject.prototype.getTriples = function(){
     if(this.rootBlock !== null && this.rootBlock.selector === 'subject'){
-        subjectValue = getParameterAsVariable(this.rootBlock.children[1].children[0].text, 'entity');
+        console.log(this.rootBlock);
+        subjectValue = this.varValue;
         triples = subjectValue + ' ';
         for(i = 0; i<this.patternBlocks.length; i++){
             patternBlock = this.patternBlocks[i];
-            predicate = getParameterAsVariable(patternBlock.children[1].children[0].text, 'property');
-            object = getParameterAsVariable(patternBlock.children[3].children[0].text, 'entity');
+            predicate = patternBlock.propertyValue; //getParameterAsVariable(patternBlock.children[1].children[0].text, 'property');
+            object = patternBlock.entityValue; //getParameterAsVariable(patternBlock.children[3].children[0].text, 'entity');
             triples += predicate + ' ';
             triples += object;
             if(i !== this.patternBlocks.length-1)
@@ -140,6 +174,21 @@ Subject.prototype.getTriples = function(){
     console.log(triples);
     return triples;
 };
+
+Subject.prototype.getSlotValue = function() {
+    let slot = this.rootBlock.children[1];
+    if(slot.category === 'variables'){
+        let varName = slot.blockSpec;
+        let ide = world.children[0];
+        let variable = ide.getVar(varName);
+        if(variable.type === 'entity')
+            return this.endpoint.entityPrefix + variable.id;
+        if(variable.type === 'property')
+            return this.endpoint.propertyPrefix + variable.id;
+        return variable;
+    }
+    else return slot.children[0].text;
+}
 
 var getParameterAsVariable = (varName, type) => {
     ide = world.children[0];
@@ -168,7 +217,7 @@ function Query(vars, endpoint, firstBlock) {
     let block = firstBlock;
     while(block !== null){
         if(block.selector === 'subject'){
-            subject = new Subject(block);
+            subject = new Subject(block, endpoint);
             this.subjectBlocks.push(subject);
         }
         else {
@@ -179,7 +228,7 @@ function Query(vars, endpoint, firstBlock) {
 };
 
 Query.prototype.getAllTriples = function () {
-    allTriples = '';
+    let allTriples = '';
     for(i = 0; i<this.subjectBlocks.length; i++){
         let subject = this.subjectBlocks[i];
         allTriples += subject.getTriples();
@@ -204,3 +253,21 @@ Query.prototype.prepareRequest = function () {
     console.log(requestUrl);
     return requestUrl;
 };
+
+Query.prototype.getQuery = function () {
+    let query = 'SELECT ';
+    console.log(this);
+    if(this.vars.contents.length > 0 && this.vars.contents[0] !== ''){
+        console.log(this.vars);
+        for(i = 0; i<this.vars.contents.length; i++){
+            requestUrl += this.vars.contents[i] + ' ';
+        }
+    }
+    else
+        throw new UnvalidBlockException('Parametri della select non validi');
+    query += 'WHERE {';
+    query += this.getAllTriples();
+    query += ' SERVICE wikibase:label {bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en"}}&format=json';
+    console.log(query);
+    return query;
+}
