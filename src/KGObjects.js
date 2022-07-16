@@ -209,12 +209,14 @@ Subject.prototype.getSlotValue = function() {
 
 Query.prototype.constructor = Query;
 
-function Query(vars, endpoint, firstBlock, limit) {
+function Query(vars, endpoint, firstBlock, order, direction, limit) {
     this.firstBlock = firstBlock;
     this.subjectBlocks = [];
     this.endpoint = endpoint;
     this.vars = vars;
     this.queryString = '';
+    this.order = order;
+    this.direction = direction;
     this.limit = limit;
     let block = firstBlock;
     while(block !== null){
@@ -242,6 +244,7 @@ Query.prototype.prepareRequest = function () {
     let requestUrl = this.endpoint.baseUrl + '?format=json&query=';
     let queryString = 'SELECT ';
     console.log(this);
+
     if(this.vars.contents.length > 0 && this.vars.contents[0] !== ''){
         console.log(this.vars);
         for(i = 0; i<this.vars.contents.length; i++){
@@ -250,16 +253,36 @@ Query.prototype.prepareRequest = function () {
     }
     else
         throw new UnvalidBlockException('Parametri della select non validi');
+
     queryString += 'WHERE {';
     queryString += this.getAllTriples();
     queryString += ' SERVICE wikibase:label {bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en"}}';
+    
+    if(this.isOrdered())
+        queryString += ' ORDER BY ' + this.direction + '(' + this.order + ')';
+
     if(this.limit != undefined && this.limit !== null && Math.round(this.limit) > 0)
-        queryString += 'LIMIT ' + Math.round(this.limit);
+        queryString += ' LIMIT ' + Math.round(this.limit);
+
     this.queryString = queryString;
     requestUrl += queryString;
     console.log(requestUrl);
     return requestUrl;
 };
+
+Query.prototype.isOrdered = function() {
+    if(this.order === undefined ||
+        this.order === null ||
+        this.order === '')
+        return false;
+    if(this.direction === undefined ||
+        this.direction === null ||
+        this.direction === '')
+        this.direction = 'ASC';
+    else
+        this.direction = this.direction[0];
+    return true;
+}
 
 function buildQueryFromQueryBlock(queryBlock, endpoint){
     let inputs = queryBlock.inputs();
@@ -282,12 +305,22 @@ function buildQueryFromQueryBlock(queryBlock, endpoint){
     //getting queryBlock's firstBlock
     let firstBlock = inputs[2].children[0];
 
+    //getting order value
+    let order;
+    if(inputs[3].category === 'variables')
+        order = ide.getVar(inputs[3].blockSpec);
+    else
+        order = inputs[3].children[0].text;
+
+    //getting direction value
+    let direction = inputs[4].constant;
+
     //getting limit value
     let limit;
-    if(inputs[3].category === 'variables')
-        limit = ide.getVar(inputs[3].blockSpec);
+    if(inputs[5].category === 'variables')
+        limit = ide.getVar(inputs[5].blockSpec);
     else
-        limit = inputs[3].children[0].text;
+        limit = inputs[5].children[0].text;
 
-    return new Query(selectVarsList, endpoint, firstBlock, limit);
+    return new Query(selectVarsList, endpoint, firstBlock, order, direction, limit);
 }

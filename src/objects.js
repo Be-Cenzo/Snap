@@ -1394,8 +1394,8 @@ SpriteMorph.prototype.initBlocks = function () {
         queryBlock: {
             type: 'reporter',
             category: 'KGQueries',
-            spec: 'select %exp from %s %br where %c %br limit %n',
-            defaults: [[], 'https://query.wikidata.org/sparql', null, 10]
+            spec: 'select %exp from %s %br where %c %br order by %s %ord %br limit %n',
+            defaults: [[], 'https://query.wikidata.org/sparql', null, 10, null, null]
         },
         showQueryResults:{
             type: 'reporter',
@@ -8139,9 +8139,11 @@ SpriteMorph.prototype.commandProva = function (variabile) {
     return variabile;
 };
 
-SpriteMorph.prototype.queryBlock = function (vars, url, block, limit) {
+SpriteMorph.prototype.queryBlock = function (vars, url, block, order, direction, limit) {
     try{
-        preparedUrl = prepareRequest(vars, url, block, limit);
+        endpoint = new WikiDataEndpoint('it', this);
+        query = new Query(vars, endpoint, block, order, direction, limit);
+        preparedUrl = query.prepareRequest();
     }
     catch(e){
         return e.message;
@@ -8227,9 +8229,9 @@ function UnvalidBlockException(message){
 };
 
 //builds the request url starting from the first block
-prepareRequest = function(vars, url, block, limit) {
+prepareRequest = function(vars, url, block, limit, order, direction) {
     endpoint = new WikiDataEndpoint('it', this);
-    query = new Query(vars, endpoint, block, limit);
+    query = new Query(vars, endpoint, block, limit, order, direcrion);
     console.log('query');
     console.log(query);
     return query.prepareRequest();
