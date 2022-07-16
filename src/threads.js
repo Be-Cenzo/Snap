@@ -827,13 +827,17 @@ Process.prototype.evaluateBlock = function (block, argCount) {
     rcvr = this.context.receiver || this.receiver;
     inputs = this.context.inputs;
 
-    if (argCount > inputs.length) {
+
+    if (argCount > inputs.length && selector !== 'translateQueryBlock') {
         // this.evaluateNextInput(block);
         this.evaluateNextInputSet(block); // frame-optimized version
     } else {
         if (this.flashContext()) {return; } // yield to flash the block
         if (this[selector]) {
             rcvr = this;
+        }
+        if (selector === 'translateQueryBlock'){
+            inputs = block.inputs();
         }
         if (this.isCatchingErrors) {
             try {

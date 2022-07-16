@@ -1391,11 +1391,11 @@ SpriteMorph.prototype.initBlocks = function () {
             spec: 'predicate: %s object: %s',
             defaults: [null, null]
         },
-        primaQuery: {
+        queryBlock: {
             type: 'reporter',
             category: 'KGQueries',
-            spec: 'select %exp from %s %br where %c',
-            defaults: [null, 'https://query.wikidata.org/sparql', null]
+            spec: 'select %exp from %s %br where %c %br limit %n',
+            defaults: [[], 'https://query.wikidata.org/sparql', null, 10]
         },
         showQueryResults:{
             type: 'reporter',
@@ -1430,7 +1430,7 @@ SpriteMorph.prototype.initBlocks = function () {
         translateQueryBlock:{
             type: 'reporter',
             category: 'KGQueries',
-            spec: 'translate query block: %block',
+            spec: 'translate query block: %s',
             defaults: [null]
         },
 
@@ -2941,7 +2941,7 @@ SpriteMorph.prototype.blockTemplates = function (
         blocks.push(block('commandProva'));
         blocks.push(block('subject'));
         blocks.push(block('pattern'));
-        blocks.push(block('primaQuery'));
+        blocks.push(block('queryBlock'));
         blocks.push(block('showQueryResults'));
         blocks.push(block('getColumn'));
         blocks.push(block('getRow'));
@@ -8139,9 +8139,9 @@ SpriteMorph.prototype.commandProva = function (variabile) {
     return variabile;
 };
 
-SpriteMorph.prototype.primaQuery = function (vars, url, block) {
+SpriteMorph.prototype.queryBlock = function (vars, url, block, limit) {
     try{
-        preparedUrl = prepareRequest(vars, url, block);
+        preparedUrl = prepareRequest(vars, url, block, limit);
     }
     catch(e){
         return e.message;
@@ -8227,9 +8227,9 @@ function UnvalidBlockException(message){
 };
 
 //builds the request url starting from the first block
-prepareRequest = function(vars, url, block) {
+prepareRequest = function(vars, url, block, limit) {
     endpoint = new WikiDataEndpoint('it', this);
-    query = new Query(vars, endpoint, block);
+    query = new Query(vars, endpoint, block, limit);
     console.log('query');
     console.log(query);
     return query.prepareRequest();
@@ -8324,13 +8324,14 @@ SpriteMorph.prototype.showSearchResults = function(varName){
 };
 
 SpriteMorph.prototype.translateQueryBlock = function(block) {
-    /*if(block.blockSpec !== 'primaQuery')
-        return 'You can translate only query blocks';*/
-        console.log('ciaoneeee');
-    console.log(block.blockSpec);
-    //endpoint = new WikiDataEndpoint('it', this);
-    //endpoint.searchEntity(search, 'property');
-    return '';
+    console.log('ciaoneeee');
+    let endpoint = new WikiDataEndpoint('it', this);
+    let query = buildQueryFromQueryBlock(block, endpoint);
+    query.prepareRequest();
+    dialogBox = new DialogBoxMorph();
+    description = query.queryString;
+    dialogBox.inform('SPARQL Query', description, world);
+    return query.queryString;
 };
 
 
@@ -9659,7 +9660,7 @@ StageMorph.prototype.blockTemplates = function (
         blocks.push(block('commandProva'));
         blocks.push(block('subject'));
         blocks.push(block('pattern'));
-        blocks.push(block('primaQuery'));
+        blocks.push(block('queryBlock'));
         blocks.push(block('showQueryResults'));
         blocks.push(block('getColumn'));
         blocks.push(block('getRow'));
@@ -10258,8 +10259,8 @@ StageMorph.prototype.salutaProva
 StageMorph.prototype.salutaCustom 
     = SpriteMorph.prototype.salutaCustom;
 
-StageMorph.prototype.primaQuery 
-    = SpriteMorph.prototype.primaQuery;
+StageMorph.prototype.queryBlock 
+    = SpriteMorph.prototype.queryBlock;
 
 StageMorph.prototype.createResultVar 
     = SpriteMorph.prototype.createResultVar;

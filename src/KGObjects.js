@@ -160,10 +160,10 @@ Subject.prototype.getTriples = function(){
         console.log(this.rootBlock);
         subjectValue = this.varValue;
         triples = subjectValue + ' ';
-        for(i = 0; i<this.patternBlocks.length; i++){
+        for(let i = 0; i<this.patternBlocks.length; i++){
             patternBlock = this.patternBlocks[i];
-            predicate = patternBlock.propertyValue; //getParameterAsVariable(patternBlock.children[1].children[0].text, 'property');
-            object = patternBlock.entityValue; //getParameterAsVariable(patternBlock.children[3].children[0].text, 'entity');
+            predicate = patternBlock.propertyValue;
+            object = patternBlock.entityValue;
             triples += predicate + ' ';
             triples += object;
             if(i !== this.patternBlocks.length-1)
@@ -190,7 +190,7 @@ Subject.prototype.getSlotValue = function() {
     else return slot.children[0].text;
 }
 
-var getParameterAsVariable = (varName, type) => {
+/*var getParameterAsVariable = (varName, type) => {
     ide = world.children[0];
     try{
         variable = ide.getVar(varName)
@@ -202,18 +202,20 @@ var getParameterAsVariable = (varName, type) => {
         variable = varName;
     }
     return variable;
-};
+};*/
 
 
 // Query ///////////////////////////////////////////////////////////
 
 Query.prototype.constructor = Query;
 
-function Query(vars, endpoint, firstBlock) {
+function Query(vars, endpoint, firstBlock, limit) {
     this.firstBlock = firstBlock;
     this.subjectBlocks = [];
     this.endpoint = endpoint;
     this.vars = vars;
+    this.queryString = '';
+    this.limit = limit;
     let block = firstBlock;
     while(block !== null){
         if(block.selector === 'subject'){
@@ -229,7 +231,7 @@ function Query(vars, endpoint, firstBlock) {
 
 Query.prototype.getAllTriples = function () {
     let allTriples = '';
-    for(i = 0; i<this.subjectBlocks.length; i++){
+    for(let i = 0; i<this.subjectBlocks.length; i++){
         let subject = this.subjectBlocks[i];
         allTriples += subject.getTriples();
     }
@@ -237,37 +239,55 @@ Query.prototype.getAllTriples = function () {
 };
 
 Query.prototype.prepareRequest = function () {
-    let requestUrl = this.endpoint.baseUrl + '?query=SELECT ';
+    let requestUrl = this.endpoint.baseUrl + '?format=json&query=';
+    let queryString = 'SELECT ';
     console.log(this);
     if(this.vars.contents.length > 0 && this.vars.contents[0] !== ''){
         console.log(this.vars);
         for(i = 0; i<this.vars.contents.length; i++){
-            requestUrl += this.vars.contents[i] + ' ';
+            queryString += this.vars.contents[i] + ' ';
         }
     }
     else
         throw new UnvalidBlockException('Parametri della select non validi');
-    requestUrl += 'WHERE {';
-    requestUrl += this.getAllTriples();
-    requestUrl += ' SERVICE wikibase:label {bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en"}}&format=json';
+    queryString += 'WHERE {';
+    queryString += this.getAllTriples();
+    queryString += ' SERVICE wikibase:label {bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en"}}';
+    if(this.limit != undefined && this.limit !== null && Math.round(this.limit) > 0)
+        queryString += 'LIMIT ' + Math.round(this.limit);
+    this.queryString = queryString;
+    requestUrl += queryString;
     console.log(requestUrl);
     return requestUrl;
 };
 
-Query.prototype.getQuery = function () {
-    let query = 'SELECT ';
-    console.log(this);
-    if(this.vars.contents.length > 0 && this.vars.contents[0] !== ''){
-        console.log(this.vars);
-        for(i = 0; i<this.vars.contents.length; i++){
-            requestUrl += this.vars.contents[i] + ' ';
-        }
+function buildQueryFromQueryBlock(queryBlock, endpoint){
+    let inputs = queryBlock.inputs();
+    selectInputs = inputs[0].inputs();
+    let selectInputVars = [];
+    ide = world.children[0];
+
+    //getting values from select slots
+    for(let i = 0; i<selectInputs.length; i++){
+        let varValue;
+        if(selectInputs[i].category === 'variables')
+            varValue = ide.getVar(selectInputs[i].blockSpec);
+        else
+            varValue = selectInputs[i].children[0].text;
+        selectInputVars.push(varValue);
     }
+    //saving array in a list
+    let selectVarsList = new List(selectInputVars);
+
+    //getting queryBlock's firstBlock
+    let firstBlock = inputs[2].children[0];
+
+    //getting limit value
+    let limit;
+    if(inputs[3].category === 'variables')
+        limit = ide.getVar(inputs[3].blockSpec);
     else
-        throw new UnvalidBlockException('Parametri della select non validi');
-    query += 'WHERE {';
-    query += this.getAllTriples();
-    query += ' SERVICE wikibase:label {bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en"}}&format=json';
-    console.log(query);
-    return query;
+        limit = inputs[3].children[0].text;
+
+    return new Query(selectVarsList, endpoint, firstBlock, limit);
 }
