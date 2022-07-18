@@ -121,14 +121,27 @@ function Literal(block){
 }
 
 Literal.prototype.getValue = function (){
+    console.log(this.block);
     let stringLiteral = '"';
-    stringLiteral += this.block.children[0].children[0].text + '"';
+    stringLiteral += this.getSlotValue(0) + '"';
     let lang = this.block.children[2].children[0].text;
     if(lang !== undefined &&
         lang !== null &&
         lang !== '')
         stringLiteral += "@" + lang;
     return stringLiteral;
+}
+
+Literal.prototype.getSlotValue = function(index){
+    let slot = this.block.children[index];
+    console.log(slot);
+    if(slot.selector === 'reportGetVar'){
+        let varName = slot.blockSpec;
+        let ide = world.children[0];
+        let variable = ide.getVar(varName);
+        return variable;
+    }
+    else return slot.children[0].text;
 }
 
 // Pattern ///////////////////////////////////////////////////////////
@@ -255,6 +268,12 @@ LogicOperator.prototype.buildAll = function(){
         let literal = new Literal(this.block);
         this.text = literal.getValue();
     }
+    else if(this.selector === 'reportGetVar'){
+        this.selector = 'plainText';
+        let varName = this.block.blockSpec;
+        let ide = world.children[0];
+        this.text = ide.getVar(varName);
+    }
     else if(this.selector === 'reportAnd' ||
         this.selector === 'reportOr' ||
         this.selector === 'reportEquals' ||
@@ -315,7 +334,7 @@ function Filter(block){
 Filter.prototype.getFilter = function(){
     let logicOperator = new LogicOperator(this.block.children[1]);
     console.log(logicOperator.toString());
-    return 'filter (' + logicOperator.toString() + ')';
+    return ' FILTER (' + logicOperator.toString() + ')';
 }
 
 
