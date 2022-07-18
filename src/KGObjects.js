@@ -13,8 +13,11 @@
 
         Endpoint
         WikiDataEndpoint
+        Literal
         Pattern
         Subject
+        LogicOperator
+        Filter
         Query
 
 
@@ -36,8 +39,11 @@ var SnapVersion = '7.4.0-dev';
 
 var Endpoint;
 var WikiDataEndpoint;
-var pattern;
+var Literal;
+var Pattern;
 var Subject;
+var LogicOperator;
+var Filter;
 var Query;
 
 // Endpoint ///////////////////////////////////////////////////////////
@@ -106,6 +112,25 @@ WikiDataEndpoint.prototype.searchEntity = function(search, type){
     }
 };
 
+// Literal ///////////////////////////////////////////////////////////
+
+Literal.prototype.constructor = Literal;
+
+function Literal(block){
+    this.block = block;
+}
+
+Literal.prototype.getValue = function (){
+    let stringLiteral = '"';
+    stringLiteral += this.block.children[0].children[0].text + '"';
+    let lang = this.block.children[2].children[0].text;
+    if(lang !== undefined &&
+        lang !== null &&
+        lang !== '')
+        stringLiteral += "@" + lang;
+    return stringLiteral;
+}
+
 // Pattern ///////////////////////////////////////////////////////////
 
 Pattern.prototype.constructor = Pattern;
@@ -120,6 +145,7 @@ function Pattern(block, endpoint){
 //index is the slot's position index which we want to get the value
 Pattern.prototype.getSlotValue = function(index){
     let slot = this.block.children[index];
+    console.log(slot);
     if(slot.category === 'variables'){
         let varName = slot.blockSpec;
         let ide = world.children[0];
@@ -129,6 +155,9 @@ Pattern.prototype.getSlotValue = function(index){
         if(variable.type === 'property')
             return this.endpoint.propertyPrefix + variable.id;
         return variable;
+    }
+    else if(slot.selector === 'literal'){
+        return new Literal(slot).getValue();
     }
     else return slot.children[0].text;
 }
@@ -204,6 +233,91 @@ Subject.prototype.getSlotValue = function() {
     return variable;
 };*/
 
+// LogicOperator ///////////////////////////////////////////////////////////
+
+LogicOperator.prototype.constructor = LogicOperator;
+
+function LogicOperator(block){
+    this.block = block;
+    this.selector = block.selector;
+    this.text = '';
+    this.logicOperators = [];
+    this.buildAll();
+}
+
+LogicOperator.prototype.buildAll = function(){
+    if(this.selector === undefined){
+        this.selector = 'plainText';
+        this.text = this.block.children[0].text;
+    }
+    else if(this.selector === 'literal'){
+        this.selector = 'plainText';
+        let literal = new Literal(this.block);
+        this.text = literal.getValue();
+    }
+    else if(this.selector === 'reportAnd' ||
+        this.selector === 'reportOr' ||
+        this.selector === 'reportEquals' ||
+        this.selector === 'reportLessThan' ||
+        this.selector === 'reportGreaterThan'){
+            this.text = this.block.children[1].text;
+            let operator = new LogicOperator(this.block.children[0]);
+            this.logicOperators.push(operator);
+            operator = new LogicOperator(this.block.children[2]);
+            this.logicOperators.push(operator);
+    }
+    else if(this.selector === 'reportNot'){
+        this.text = this.block.children[0].text;
+        let operator = new LogicOperator(this.block.children[1]);
+        this.logicOperators.push(operator);
+    }
+    else {
+        throw new UnvalidBlockException('I blocchi inseriti non sono validi');
+    }
+}
+
+LogicOperator.prototype.toString = function(){
+    if(this.selector === 'plainText')
+        return this.text;
+    let string = '';
+    if(this.selector === 'reportEquals' ||
+    this.selector === 'reportLessThan' ||
+    this.selector === 'reportGreaterThan'){
+        string += '(' + this.logicOperators[0].toString();
+        string += ' ' + this.text + ' ';
+        string += this.logicOperators[1].toString() + ')';
+    }
+    else if(this.selector === 'reportAnd'){
+        string += '(' + this.logicOperators[0].toString();
+        string += ' && ';
+        string += this.logicOperators[1].toString() + ')';
+    }
+    else if(this.selector === 'reportOr'){
+        string += this.logicOperators[0].toString();
+        string += ' || ';
+        string += this.logicOperators[1].toString();
+    }
+    else if(this.logicOperators.length === 1){
+        string += '!(';
+        string += this.logicOperators[0].toString() + ')';
+    }
+    return string;
+}
+
+// Filter ///////////////////////////////////////////////////////////
+
+Filter.prototype.constructor = Filter;
+
+function Filter(block){
+    this.block = block;
+}
+
+Filter.prototype.getFilter = function(){
+    let logicOperator = new LogicOperator(this.block.children[1]);
+    console.log(logicOperator.toString());
+    return 'filter (' + logicOperator.toString() + ')';
+}
+
 
 // Query ///////////////////////////////////////////////////////////
 
@@ -212,6 +326,7 @@ Query.prototype.constructor = Query;
 function Query(vars, endpoint, firstBlock, order, direction, limit) {
     this.firstBlock = firstBlock;
     this.subjectBlocks = [];
+    this.filterBlocks = [];
     this.endpoint = endpoint;
     this.vars = vars;
     this.queryString = '';
@@ -221,8 +336,12 @@ function Query(vars, endpoint, firstBlock, order, direction, limit) {
     let block = firstBlock;
     while(block !== null){
         if(block.selector === 'subject'){
-            subject = new Subject(block, endpoint);
+            let subject = new Subject(block, endpoint);
             this.subjectBlocks.push(subject);
+        }
+        else if(block.selector === 'filter'){
+            let filter = new Filter(block);
+            this.filterBlocks.push(filter);
         }
         else {
             throw new UnvalidBlockException('I blocchi inseriti non sono validi');
@@ -236,6 +355,10 @@ Query.prototype.getAllTriples = function () {
     for(let i = 0; i<this.subjectBlocks.length; i++){
         let subject = this.subjectBlocks[i];
         allTriples += subject.getTriples();
+    }
+    for(let i = 0; i<this.filterBlocks.length; i++){
+        let filter = this.filterBlocks[i];
+        allTriples += filter.getFilter();
     }
     return allTriples;
 };

@@ -1379,6 +1379,12 @@ SpriteMorph.prototype.initBlocks = function () {
             spec: 'inserisci var: %n',
             defaults: [null]
         },
+        literal: {
+            type: 'reporter',
+            category: 'KGQueries',
+            spec: '%s @ %s',
+            defaults: [null, null]
+        },
         subject: {
             type: 'command',
             category: 'KGQueries',
@@ -1390,6 +1396,12 @@ SpriteMorph.prototype.initBlocks = function () {
             category: 'KGQueries',
             spec: 'predicate: %s object: %s',
             defaults: [null, null]
+        },
+        filter: {
+            type: 'command',
+            category: 'KGQueries',
+            spec: 'filter: %s',
+            defaults: [null]
         },
         queryBlock: {
             type: 'reporter',
@@ -2939,14 +2951,20 @@ SpriteMorph.prototype.blockTemplates = function (
         blocks.push(block('salutaProva'));
         blocks.push(block('salutaCustom'));
         blocks.push(block('commandProva'));
+        blocks.push('-');
+        blocks.push(block('literal'));
         blocks.push(block('subject'));
         blocks.push(block('pattern'));
+        blocks.push(block('filter'));
         blocks.push(block('queryBlock'));
         blocks.push(block('showQueryResults'));
+        blocks.push('-');
         blocks.push(block('getColumn'));
         blocks.push(block('getRow'));
+        blocks.push('-');
         blocks.push(block('searchEntity'));
         blocks.push(block('searchProperty'));
+        blocks.push('-');
         blocks.push(block('translateQueryBlock'));
     }
 
@@ -8139,6 +8157,15 @@ SpriteMorph.prototype.commandProva = function (variabile) {
     return variabile;
 };
 
+SpriteMorph.prototype.literal = function(string, lang){
+    let stringLiteral = '"' + string + '"';
+    if(lang !== undefined &&
+        lang !== null &&
+        lang !== '')
+        stringLiteral += "@" + lang;
+    return stringLiteral;
+}
+
 SpriteMorph.prototype.queryBlock = function (vars, url, block, order, direction, limit) {
     try{
         endpoint = new WikiDataEndpoint('it', this);
@@ -9660,14 +9687,20 @@ StageMorph.prototype.blockTemplates = function (
         blocks.push(block('salutaProva'));
         blocks.push(block('salutaCustom'));
         blocks.push(block('commandProva'));
+        blocks.push('-');
+        blocks.push(block('literal'));
         blocks.push(block('subject'));
         blocks.push(block('pattern'));
+        blocks.push(block('filter'));
         blocks.push(block('queryBlock'));
         blocks.push(block('showQueryResults'));
+        blocks.push('-');
         blocks.push(block('getColumn'));
         blocks.push(block('getRow'));
+        blocks.push('-');
         blocks.push(block('searchEntity'));
         blocks.push(block('searchProperty'));
+        blocks.push('-');
         blocks.push(block('translateQueryBlock'));
     }
 
@@ -10260,6 +10293,9 @@ StageMorph.prototype.salutaProva
 
 StageMorph.prototype.salutaCustom 
     = SpriteMorph.prototype.salutaCustom;
+
+StageMorph.prototype.literal 
+    = SpriteMorph.prototype.literal;
 
 StageMorph.prototype.queryBlock 
     = SpriteMorph.prototype.queryBlock;
