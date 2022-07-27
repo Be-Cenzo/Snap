@@ -1362,23 +1362,6 @@ SpriteMorph.prototype.initBlocks = function () {
         },
         
         // KGQueries
-        salutaProva: {
-            type: 'reporter',
-            category: 'KGQueries',
-            spec: 'saluti a tutti'
-        },
-        salutaCustom: {
-            type: 'reporter',
-            category: 'KGQueries',
-            spec: 'ciao %s',
-            defaults: ['a tutti']
-        },
-        commandProva: {
-            type: 'command',
-            category: 'KGQueries',
-            spec: 'inserisci var: %n',
-            defaults: [null]
-        },
         literal: {
             type: 'reporter',
             category: 'KGQueries',
@@ -2948,16 +2931,13 @@ SpriteMorph.prototype.blockTemplates = function (
             blocks.push(block('doShowTable'));
         }
     } else if (category === 'KGQueries'){
-        blocks.push(block('salutaProva'));
-        blocks.push(block('salutaCustom'));
-        blocks.push(block('commandProva'));
         blocks.push('-');
-        blocks.push(block('literal'));
+        blocks.push(block('queryBlock'));
         blocks.push(block('subject'));
         blocks.push(block('pattern'));
-        blocks.push(block('filter'));
-        blocks.push(block('queryBlock'));
         blocks.push(block('showQueryResults'));
+        blocks.push(block('literal'));
+        blocks.push(block('filter'));
         blocks.push('-');
         blocks.push(block('getColumn'));
         blocks.push(block('getRow'));
@@ -8113,49 +8093,6 @@ SpriteMorph.prototype.newSoundName = function (name, ignoredSound) {
 };
 
 //KGQueries
-//blocchi di prova
-SpriteMorph.prototype.salutaProva = function () {
-    return 'Ciao a tutti';
-};
-
-
-SpriteMorph.prototype.salutaCustom = function (text) {
-    text = 'Ciao ' + text;
-    ide = world.children[0];
-    scene = ide.scene;
-    stage = this.parentThatIsA(StageMorph);
-    scene.globalVariables.addVar("Vincenzo", "Sei Forte");
-    ide.flushBlocksCache('variables');
-    ide.refreshPalette();
-    watcher = this.findVariableWatcher("Vincenzo");
-    if (watcher !== null) {
-        watcher.show();
-        watcher.fixLayout(); // re-hide hidden parts
-        watcher.keepWithin(stage);
-        ide.flushBlocksCache('variables');
-        ide.refreshPalette();
-    }
-    else
-        this.toggleVariableWatcher("Vincenzo", true);
-
-    return ide.getVar("Vincenzo");
-    return text;
-};
-
-SpriteMorph.prototype.commandProva = function (variabile) {
-    variabile = variabile + '!!!';
-    
-    console.log(this.scripts.children[0].nextBlock().nextBlock().nextBlock().inputs());
-    console.log(variabile);
-
-    nuovoBlocco = this.scripts.children[0].nextBlock().nextBlock().nextBlock();
-    nuovoBlocco.inputs().push('!!!');
-    nuovoBlocco.selectior = 'doSetVar';
-
-    JSCompiler.compileExpression(this.scripts.children[0].nextBlock().nextBlock().nextBlock());
-    
-    return variabile;
-};
 
 SpriteMorph.prototype.literal = function(string, lang){
     let stringLiteral = '"' + string + '"';
@@ -8175,7 +8112,6 @@ SpriteMorph.prototype.queryBlock = function (vars, url, block, order, direction,
     catch(e){
         return e.message;
     }
-    resultTable = new Table(2, 2);
     result = new XMLHttpRequest();
     result.open('GET', preparedUrl, true);
     result.send(null);
@@ -8228,12 +8164,9 @@ SpriteMorph.prototype.showResults = function (result, block){
             for(j = 0; j<cols; j++){
                 entry = Object.entries(response.results.bindings[i]);
                 resultTable.set(entry[j][1].value, j+1, i+1);
-
             }
         }
-        console.log(result);
-        console.log(response);
-
+        
         queryResults = {
             rows: rows,
             cols: cols,
@@ -9684,16 +9617,13 @@ StageMorph.prototype.blockTemplates = function (
         }
     }
     if(category === 'KGQueries'){
-        blocks.push(block('salutaProva'));
-        blocks.push(block('salutaCustom'));
-        blocks.push(block('commandProva'));
         blocks.push('-');
-        blocks.push(block('literal'));
+        blocks.push(block('queryBlock'));
         blocks.push(block('subject'));
         blocks.push(block('pattern'));
-        blocks.push(block('filter'));
-        blocks.push(block('queryBlock'));
         blocks.push(block('showQueryResults'));
+        blocks.push(block('literal'));
+        blocks.push(block('filter'));
         blocks.push('-');
         blocks.push(block('getColumn'));
         blocks.push(block('getRow'));
@@ -10288,12 +10218,6 @@ StageMorph.prototype.receiveUserInteraction
 
 // StageMorph KGQueries blocks
 
-StageMorph.prototype.salutaProva 
-    = SpriteMorph.prototype.salutaProva;
-
-StageMorph.prototype.salutaCustom 
-    = SpriteMorph.prototype.salutaCustom;
-
 StageMorph.prototype.literal 
     = SpriteMorph.prototype.literal;
 
@@ -10320,6 +10244,9 @@ StageMorph.prototype.searchEntity
 
 StageMorph.prototype.searchProperty 
     = SpriteMorph.prototype.searchProperty;
+
+StageMorph.prototype.showSearchResults 
+    = SpriteMorph.prototype.showSearchResults;
     
 StageMorph.prototype.translateQueryBlock 
     = SpriteMorph.prototype.translateQueryBlock;

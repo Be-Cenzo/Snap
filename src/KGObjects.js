@@ -85,27 +85,27 @@ WikiDataEndpoint.prototype.init = function(language, morph){
 };
 
 WikiDataEndpoint.prototype.searchEntity = function(search, type){
-    requestUrl = 'https://www.wikidata.org/w/api.php?action=wbsearchentities&language=' + this.language +'&uselang=' + this.language + '&type=' + type + '&format=json&origin=*&search=' + search;
-    console.log(requestUrl);
+    requestUrl = 'https://www.wikidata.org/w/api.php?action=wbsearchentities&language=' 
+                + this.language +'&uselang=' + this.language + '&type=' + type 
+                + '&format=json&origin=*&search=' + search;
     result = new XMLHttpRequest();
     result.open('GET', requestUrl, true);
     result.send(null);
     result.onreadystatechange = () => {
         json = JSON.parse(result.response);
-        console.log(json);
         if(json.search.length == 0)
             return null;
-        temp = json.search[0];
+        first = json.search[0];
         if(type === 'item')
             dataType = 'entity';
         else if(type === 'property')
             dataType = 'property';
         searchResult = {
-            id: temp.id,
+            id: first.id,
             type: dataType,
-            label: temp.display.label.value,
-            description: temp.display.description.value,
-            concepturi: temp.concepturi
+            label: first.display.label.value,
+            description: first.display.description.value,
+            concepturi: first.concepturi
         };
         this.morph.createResultVar('searchResult', searchResult);
         this.morph.showSearchResults('searchResult');
