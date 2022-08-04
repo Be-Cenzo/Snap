@@ -515,14 +515,6 @@ SyntaxElementMorph.prototype.labelParts = {
             'ray length' : ['ray length']
         }
     },
-    '%ord': {
-        type: 'input',
-        tags: 'read-only static',
-        menu: {
-            'ASC' : ['ASC'],
-            'DESC' : ['DESC']
-        }
-    },
     '%loc': {
         type: 'input',
         tags: 'read-only',

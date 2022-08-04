@@ -16,6 +16,8 @@
 
         SpriteMorph
         StageMorph
+        SyntaxElementMorph
+
         Endpoint
         WikiDataEndpoint
         Literal
@@ -452,6 +454,17 @@ StageMorph.prototype.showSearchResults
     
 StageMorph.prototype.translateQueryBlock 
     = SpriteMorph.prototype.translateQueryBlock;
+
+// SyntaxElementMorph ///////////////////////////////////////////////////////////
+
+SyntaxElementMorph.prototype.labelParts['%ord'] = {
+        type: 'input',
+        tags: 'read-only static',
+        menu: {
+            'ASC' : ['ASC'],
+            'DESC' : ['DESC']
+        }
+    };
 
 // Endpoint ///////////////////////////////////////////////////////////
 
