@@ -156,8 +156,7 @@ SpriteMorph.prototype.categories =
         'operators',
         'variables',
         'lists',
-        'other',
-        'KGQueries'
+        'other'
     ];
 
 SpriteMorph.prototype.blockColor = {
@@ -170,8 +169,7 @@ SpriteMorph.prototype.blockColor = {
     operators : new Color(98, 194, 19),
     variables : new Color(243, 118, 29),
     lists : new Color(217, 77, 17),
-    other: new Color(150, 150, 150),
-    KGQueries: new Color(153, 0, 0)
+    other: new Color(150, 150, 150)
 };
 
 SpriteMorph.prototype.customCategories = new Map(); // key: name, value: color
@@ -1359,74 +1357,6 @@ SpriteMorph.prototype.initBlocks = function () {
             type: 'command',
             category: 'other',
             spec: 'script variables %scriptVars'
-        },
-        
-        // KGQueries
-        literal: {
-            type: 'reporter',
-            category: 'KGQueries',
-            spec: '%s @ %s',
-            defaults: [null, null]
-        },
-        subject: {
-            type: 'command',
-            category: 'KGQueries',
-            spec: 'subject: %s %c',
-            defaults: [null, null]
-        },
-        pattern: {
-            type: 'command',
-            category: 'KGQueries',
-            spec: 'predicate: %s object: %s',
-            defaults: [null, null]
-        },
-        filter: {
-            type: 'command',
-            category: 'KGQueries',
-            spec: 'filter: %s',
-            defaults: [null]
-        },
-        queryBlock: {
-            type: 'reporter',
-            category: 'KGQueries',
-            spec: 'select %exp from %s %br where %c %br order by %s %ord %br limit %n',
-            defaults: [[], 'https://query.wikidata.org/sparql', null, 10, null, null]
-        },
-        showQueryResults:{
-            type: 'reporter',
-            category: 'KGQueries',
-            spec: 'show results %var',
-            defaults: [null]
-        },
-        getColumn:{
-            type: 'reporter',
-            category: 'KGQueries',
-            spec: 'get column %n from %var',
-            defaults: [1, null]
-        },
-        getRow:{
-            type: 'reporter',
-            category: 'KGQueries',
-            spec: 'get row %n from %var',
-            defaults: [1, null]
-        },
-        searchEntity:{
-            type: 'reporter',
-            category: 'KGQueries',
-            spec: 'search an entity: %s',
-            defaults: ['something']
-        },
-        searchProperty:{
-            type: 'reporter',
-            category: 'KGQueries',
-            spec: 'search a property: %s',
-            defaults: ['something']
-        },
-        translateQueryBlock:{
-            type: 'reporter',
-            category: 'KGQueries',
-            spec: 'translate query block: %s',
-            defaults: [null]
         },
 
         // inheritance
@@ -2930,22 +2860,6 @@ SpriteMorph.prototype.blockTemplates = function (
             blocks.push('-');
             blocks.push(block('doShowTable'));
         }
-    } else if (category === 'KGQueries'){
-        blocks.push('-');
-        blocks.push(block('queryBlock'));
-        blocks.push(block('subject'));
-        blocks.push(block('pattern'));
-        blocks.push(block('showQueryResults'));
-        blocks.push(block('literal'));
-        blocks.push(block('filter'));
-        blocks.push('-');
-        blocks.push(block('getColumn'));
-        blocks.push(block('getRow'));
-        blocks.push('-');
-        blocks.push(block('searchEntity'));
-        blocks.push(block('searchProperty'));
-        blocks.push('-');
-        blocks.push(block('translateQueryBlock'));
     }
 
     return blocks;
@@ -8092,211 +8006,6 @@ SpriteMorph.prototype.newSoundName = function (name, ignoredSound) {
     return newName;
 };
 
-//KGQueries
-
-SpriteMorph.prototype.literal = function(string, lang){
-    let stringLiteral = '"' + string + '"';
-    if(lang !== undefined &&
-        lang !== null &&
-        lang !== '')
-        stringLiteral += "@" + lang;
-    return stringLiteral;
-}
-
-SpriteMorph.prototype.queryBlock = function (vars, url, block, order, direction, limit) {
-    try{
-        endpoint = new WikiDataEndpoint('it', this);
-        query = new Query(vars, endpoint, block, order, direction, limit);
-        preparedUrl = query.prepareRequest();
-    }
-    catch(e){
-        return e.message;
-    }
-    result = new XMLHttpRequest();
-    result.open('GET', preparedUrl, true);
-    result.send(null);
-    result.onreadystatechange = () => this.showResults(result, block);
-    return "Caricamento...";
-};
-
-// Creates a global variable named with de value of varName and containing value
-// it also adds a watcher to the stage
-SpriteMorph.prototype.createResultVar = function (varName, value){
-    ide = world.children[0];
-    scene = ide.scene;
-    stage = this.parentThatIsA(StageMorph);
-    scene.globalVariables.addVar(varName, value);
-    ide.flushBlocksCache('variables');
-    ide.refreshPalette();
-    watcher = this.findVariableWatcher(varName);
-    if (watcher !== null) {
-        watcher.show();
-        watcher.fixLayout(); // re-hide hidden parts
-        watcher.keepWithin(stage);
-        ide.flushBlocksCache('variables');
-        ide.refreshPalette();
-    }
-    else
-        this.toggleVariableWatcher(varName, true);
-};
-
-//Handles readyState changes and showes query's results
-SpriteMorph.prototype.showResults = function (result, block){
-    if (result.readyState == 4 && result.status == 200) {
-        response = JSON.parse(result.responseText);
-        rows = response.results.bindings.length;
-        if(rows == 0){
-            block.showBubble(
-                "Nessun risultato.",
-                null,
-                null
-            );
-            return;
-        }
-        
-        entry = Object.entries(response.results.bindings[0]);
-        cols = entry.length;
-        resultTable = new Table(cols, rows);
-        for(i = 0; i<cols; i++)
-            resultTable.setColName(i-1, entry[i][0]);
-        
-        for(i = 0; i<rows; i++){
-            for(j = 0; j<cols; j++){
-                entry = Object.entries(response.results.bindings[i]);
-                resultTable.set(entry[j][1].value, j+1, i+1);
-            }
-        }
-        
-        queryResults = {
-            rows: rows,
-            cols: cols,
-            resultTable: resultTable
-        };
-        this.createResultVar("Results", queryResults);
-        this.showQueryResults("Results");
-   }
-   else if (result.readyState == 4 && result.status == 400) {
-        block.showBubble(
-            "La query non è corretta.",
-            null,
-            null
-        );
-    }
-};
-
-function UnvalidBlockException(message){
-    this.message = message;
-};
-
-//builds the request url starting from the first block
-prepareRequest = function(vars, url, block, limit, order, direction) {
-    endpoint = new WikiDataEndpoint('it', this);
-    query = new Query(vars, endpoint, block, limit, order, direcrion);
-    console.log('query');
-    console.log(query);
-    return query.prepareRequest();
-};
-
-//shows query results saved inside varName
-SpriteMorph.prototype.showQueryResults = function(varName){
-    ide = world.children[0];
-    queryResults = ide.getVar(varName);
-    console.log(queryResults);
-    tableMorph = new TableMorph(queryResults.resultTable);
-    tableDialogMorph = new TableDialogMorph(
-        tableMorph.table,
-        tableMorph.globalColWidth,
-        tableMorph.colWidths,
-        tableMorph.rowHeight
-    ).popUp(this.world());
-    console.log(tableMorph);
-    return null;
-};
-
-// Allow the user to get a single column from a query result
-SpriteMorph.prototype.getColumn = function (index, varName){
-    ide = world.children[0];
-    queryResults = ide.getVar(varName);
-    if(typeof(index) !== 'number')
-        return queryResults;
-    table = queryResults.resultTable;
-    resultTable = new Table(1, queryResults.rows);
-    resultTable.setColName(-1, table.colName(index));
-
-    tableColumn = table.col(index);
-    if(!tableColumn)
-        return null;
-    for(i = 1; i<=queryResults.rows; i++){
-        resultTable.set(tableColumn[i-1], 1, i);
-    }
-    console.log(table.col(index));
-    column = {
-        cols: 1,
-        rows: queryResults.rows,
-        resultTable: resultTable
-    };
-    return column;
-};
-
-// Allow the user to get a single row from a query result
-SpriteMorph.prototype.getRow = function (index, varName){
-    ide = world.children[0];
-    queryResults = ide.getVar(varName);
-    if(typeof(index) !== 'number')
-        return queryResults;
-    table = queryResults.resultTable;
-    resultTable = new Table(queryResults.cols, 1);
-    resultTable.setColNames(table.columnNames());
-
-    tableRow = table.row(index);
-    if(!tableRow)
-        return null;
-    for(i = 1; i<=queryResults.cols; i++){
-        resultTable.set(tableRow[i-1], i, 1);
-    }
-    console.log(table.row(index));
-    row = {
-        cols: queryResults.cols,
-        rows: 1,
-        resultTable: resultTable
-    };
-    return row;
-};
-
-// Allow the user to search for an entity in a knowledge graph
-SpriteMorph.prototype.searchEntity = function(search) {
-    endpoint = new WikiDataEndpoint('it', this);
-    endpoint.searchEntity(search, 'item');
-};
-
-// Allow the user to search for a property in a knowledge graph
-SpriteMorph.prototype.searchProperty = function(search) {
-    endpoint = new WikiDataEndpoint('it', this);
-    endpoint.searchEntity(search, 'property');
-};
-
-// show search results saved inside varName
-SpriteMorph.prototype.showSearchResults = function(varName){
-    ide = world.children[0];
-    searchResults = ide.getVar(varName);
-    dialogBox = new DialogBoxMorph();
-    description = searchResults.label + '\n' + searchResults.description + '\n' + searchResults.concepturi;
-    dialogBox.inform('Search Results', description, world);
-    return null;
-};
-
-SpriteMorph.prototype.translateQueryBlock = function(block) {
-    console.log('ciaoneeee');
-    let endpoint = new WikiDataEndpoint('it', this);
-    let query = buildQueryFromQueryBlock(block, endpoint);
-    query.prepareRequest();
-    dialogBox = new DialogBoxMorph();
-    description = query.queryString;
-    dialogBox.inform('SPARQL Query', description, world);
-    return query.queryString;
-};
-
-
 // SpriteHighlightMorph /////////////////////////////////////////////////
 
 // SpriteHighlightMorph inherits from Morph:
@@ -9616,24 +9325,6 @@ StageMorph.prototype.blockTemplates = function (
             blocks.push(block('doShowTable'));
         }
     }
-    if(category === 'KGQueries'){
-        blocks.push('-');
-        blocks.push(block('queryBlock'));
-        blocks.push(block('subject'));
-        blocks.push(block('pattern'));
-        blocks.push(block('showQueryResults'));
-        blocks.push(block('literal'));
-        blocks.push(block('filter'));
-        blocks.push('-');
-        blocks.push(block('getColumn'));
-        blocks.push(block('getRow'));
-        blocks.push('-');
-        blocks.push(block('searchEntity'));
-        blocks.push(block('searchProperty'));
-        blocks.push('-');
-        blocks.push(block('translateQueryBlock'));
-    }
-
     return blocks;
 };
 
@@ -10215,41 +9906,6 @@ StageMorph.prototype.mouseScroll
 
 StageMorph.prototype.receiveUserInteraction
     = SpriteMorph.prototype.receiveUserInteraction;
-
-// StageMorph KGQueries blocks
-
-StageMorph.prototype.literal 
-    = SpriteMorph.prototype.literal;
-
-StageMorph.prototype.queryBlock 
-    = SpriteMorph.prototype.queryBlock;
-
-StageMorph.prototype.createResultVar 
-    = SpriteMorph.prototype.createResultVar;
-
-StageMorph.prototype.showResults 
-    = SpriteMorph.prototype.showResults;
-
-StageMorph.prototype.showQueryResults 
-    = SpriteMorph.prototype.showQueryResults;
-
-StageMorph.prototype.getColumn 
-    = SpriteMorph.prototype.getColumn;
-
-StageMorph.prototype.getRow 
-    = SpriteMorph.prototype.getRow;
-
-StageMorph.prototype.searchEntity 
-    = SpriteMorph.prototype.searchEntity;
-
-StageMorph.prototype.searchProperty 
-    = SpriteMorph.prototype.searchProperty;
-
-StageMorph.prototype.showSearchResults 
-    = SpriteMorph.prototype.showSearchResults;
-    
-StageMorph.prototype.translateQueryBlock 
-    = SpriteMorph.prototype.translateQueryBlock;
 
 // StageMorph custom blocks
 
