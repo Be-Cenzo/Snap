@@ -19,8 +19,9 @@
         SyntaxElementMorph
 
         Endpoint
-        WikiDataEndpoint
+            WikiDataEndpoint
         Literal
+            DateElement
         Pattern
         Subject
         LogicOperator
@@ -49,6 +50,7 @@ var SnapVersion = '7.4.0-dev';
 var Endpoint;
 var WikiDataEndpoint;
 var Literal;
+var DateElement;
 var Pattern;
 var Subject;
 var LogicOperator;
@@ -115,6 +117,12 @@ SpriteMorph.prototype.initBlocks = function (){
         spec: '%s @ %s',
         defaults: [null, null]
     };
+    SpriteMorph.prototype.blocks["dateElement"] = {
+        type: 'reporter',
+        category: 'KGQueries',
+        spec: 'date: %s',
+        defaults: ['AAAA-MM-DD']
+    };
     SpriteMorph.prototype.blocks["showQueryResults"] = {
         type: 'reporter',
         category: 'KGQueries',
@@ -136,14 +144,14 @@ SpriteMorph.prototype.initBlocks = function (){
     SpriteMorph.prototype.blocks["searchEntity"] = {
         type: 'reporter',
         category: 'KGQueries',
-        spec: 'search an entity: %s',
-        defaults: ['something']
+        spec: 'search an entity: %s %br select a language: %s',
+        defaults: ['something','it']
     };
     SpriteMorph.prototype.blocks["searchProperty"] = {
         type: 'reporter',
         category: 'KGQueries',
-        spec: 'search a property: %s',
-        defaults: ['something']
+        spec: 'search a property: %s %br select a language: %s',
+        defaults: ['something','it']
     };
     SpriteMorph.prototype.blocks["translateQueryBlock"] = {
         type: 'reporter',
@@ -185,6 +193,7 @@ SpriteMorph.prototype.blockTemplates = function (
         blocks.push(block('pattern'));
         blocks.push(block('showQueryResults'));
         blocks.push(block('literal'));
+        blocks.push(block('dateElement'));
         blocks.push(block('filter'));
         blocks.push('-');
         blocks.push(block('getColumn'));
@@ -209,6 +218,11 @@ SpriteMorph.prototype.literal = function(string, lang){
         lang !== null &&
         lang !== '')
         stringLiteral += "@" + lang;
+    return stringLiteral;
+};
+
+SpriteMorph.prototype.dateElement = function(string){
+    let stringLiteral = '"' + string + '"^^xsd:dateTime';
     return stringLiteral;
 };
 
@@ -323,8 +337,6 @@ SpriteMorph.prototype.showQueryResults = function(varName){
             tableMorph.colWidths,
             tableMorph.rowHeight
         );
-        console.log("eccolo");
-        console.log(tableDialogMorph);
 
         tableDialogMorph.userMenu = function () {
             var menu = new MenuMorph(this);
@@ -355,12 +367,14 @@ SpriteMorph.prototype.getColumn = function (index, varName){
     if(typeof(index) !== 'number')
         return queryResults;
     let table = queryResults.table;
+    if(!table)
+        return new QueryResult(null, 1);
     let resultTable = new Table(1, table.rows());
     resultTable.setColName(-1, table.colName(index));
 
     let tableColumn = table.col(index);
     if(!tableColumn)
-        return null;
+        return new QueryResult(null, 1);
     for(i = 1; i<=table.rows(); i++){
         resultTable.set(tableColumn[i-1], 1, i);
     }
@@ -381,12 +395,14 @@ SpriteMorph.prototype.getRow = function (index, varName){
     if(typeof(index) !== 'number')
         return queryResults;
     let table = queryResults.table;
+    if(!table)
+        return new QueryResult(null, 1);
     let resultTable = new Table(table.cols(), 1);
     resultTable.setColNames(table.columnNames());
 
     let tableRow = table.row(index);
     if(!tableRow)
-        return null;
+        return new QueryResult(null, 1);
     for(i = 1; i<=table.cols(); i++){
         resultTable.set(tableRow[i-1], i, 1);
     }
@@ -401,15 +417,15 @@ SpriteMorph.prototype.getRow = function (index, varName){
 };
 
 // Allow the user to search for an entity in a knowledge graph
-SpriteMorph.prototype.searchEntity = function(search) {
-    let endpoint = new WikiDataEndpoint('it', this);
+SpriteMorph.prototype.searchEntity = function(search, lang) {
+    let endpoint = new WikiDataEndpoint(lang, this);
     endpoint.searchEntity(search, 'item');
     return null;
 };
 
 // Allow the user to search for a property in a knowledge graph
-SpriteMorph.prototype.searchProperty = function(search) {
-    let endpoint = new WikiDataEndpoint('it', this);
+SpriteMorph.prototype.searchProperty = function(search, lang) {
+    let endpoint = new WikiDataEndpoint(lang, this);
     endpoint.searchEntity(search, 'property');
     return null;
 };
@@ -420,7 +436,10 @@ SpriteMorph.prototype.showSearchResults = function(varName){
     let searchResults = ide.getVar(varName);
     let dialogBox = new DialogBoxMorph();
     
-    description = searchResults.label + '\n' + searchResults.description + '\n' + searchResults.concepturi;
+    if(searchResults.error === 1)
+        description = "Nessun Risultato.";
+    else
+        description = searchResults.label + '\n' + searchResults.description + '\n' + searchResults.concepturi;
     dialogBox.inform('Search Results', description, world);
 
     // add a menu for exporting results
@@ -481,6 +500,7 @@ StageMorph.prototype.blockTemplates = function (
         blocks.push(block('pattern'));
         blocks.push(block('showQueryResults'));
         blocks.push(block('literal'));
+        blocks.push(block('dateElement'));
         blocks.push(block('filter'));
         blocks.push('-');
         blocks.push(block('getColumn'));
@@ -489,6 +509,7 @@ StageMorph.prototype.blockTemplates = function (
         blocks.push(block('searchEntity'));
         blocks.push(block('searchProperty'));
         blocks.push('-');
+        blocks.push(block('executeQueryBlock'));
         blocks.push(block('translateQueryBlock'));
     }
 
@@ -497,6 +518,9 @@ StageMorph.prototype.blockTemplates = function (
 
 StageMorph.prototype.literal 
     = SpriteMorph.prototype.literal;
+
+StageMorph.prototype.dateElement 
+    = SpriteMorph.prototype.dateElement;
 
 StageMorph.prototype.queryBlock 
     = SpriteMorph.prototype.queryBlock;
@@ -527,6 +551,9 @@ StageMorph.prototype.showSearchResults
     
 StageMorph.prototype.translateQueryBlock 
     = SpriteMorph.prototype.translateQueryBlock;
+
+StageMorph.prototype.executeQueryBlock 
+        = SpriteMorph.prototype.executeQueryBlock;
 
 // SyntaxElementMorph ///////////////////////////////////////////////////////////
 
@@ -571,7 +598,10 @@ function WikiDataEndpoint(language, morph){
 
 WikiDataEndpoint.prototype.init = function(language, morph){
     this.baseUrl = 'https://query.wikidata.org/sparql';
-    this.language = language;
+    if(language && language !== '')
+        this.language = language;
+    else
+        this.language = 'en';
     this.morph = morph; // is a SpriteMorph or a StageMorph (if the block is used on a Sprite or a Stage)
     this.entityPrefix = 'wd:';
     this.propertyPrefix = 'wdt:';
@@ -635,6 +665,7 @@ Literal.prototype.getValue = function (){
 
 Literal.prototype.getSlotValue = function(index){
     let slot = this.block.children[index];
+    console.log("slot: ");
     console.log(slot);
     if(slot.selector === 'reportGetVar'){
         let varName = slot.blockSpec;
@@ -643,6 +674,24 @@ Literal.prototype.getSlotValue = function(index){
         return variable;
     }
     else return slot.children[0].text;
+}
+
+// DateElement ///////////////////////////////////////////////////////////
+
+DateElement.prototype = new Literal();
+DateElement.prototype.constructor = DateElement;
+DateElement.uber = Literal.prototype;
+
+function DateElement(block){
+    this.block = block;
+}
+
+DateElement.prototype.getValue = function (){
+    console.log(this.block);
+    let stringLiteral = '"';
+    stringLiteral += this.getSlotValue(1) + '"';
+    stringLiteral += "^^xsd:dateTime";
+    return stringLiteral;
 }
 
 // Pattern ///////////////////////////////////////////////////////////
@@ -672,6 +721,9 @@ Pattern.prototype.getSlotValue = function(index){
     }
     else if(slot.selector === 'literal'){
         return new Literal(slot).getValue();
+    }
+    else if(slot.selector === 'dateElement'){
+        return new DateElement(slot).getValue();
     }
     else return slot.children[0].text;
 }
@@ -769,6 +821,11 @@ LogicOperator.prototype.buildAll = function(){
         let literal = new Literal(this.block);
         this.text = literal.getValue();
     }
+    else if(this.selector === 'dateElement'){
+        this.selector = 'plainText';
+        let date = new DateElement(this.block);
+        this.text = date.getValue();
+    }
     else if(this.selector === 'reportGetVar'){
         this.selector = 'plainText';
         let varName = this.block.blockSpec;
@@ -835,7 +892,7 @@ function Filter(block){
 Filter.prototype.getFilter = function(){
     let logicOperator = new LogicOperator(this.block.children[1]);
     console.log(logicOperator.toString());
-    return 'FILTER (' + logicOperator.toString() + ')\n';
+    return 'FILTER (' + logicOperator.toString() + ') \n';
 }
 
 
@@ -900,13 +957,13 @@ Query.prototype.prepareRequest = function () {
 
     queryString += '\nWHERE {\n';
     queryString += this.getAllTriples();
-    queryString += 'SERVICE wikibase:label {bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en"}}\n';
+    queryString += 'SERVICE wikibase:label {bd:serviceParam wikibase:language "' + this.endpoint.language + ',en"}} \n';
     
     if(this.isOrdered())
-        queryString += ' ORDER BY ' + this.direction + '(' + this.order + ')\n';
+        queryString += 'ORDER BY ' + this.direction + '(' + this.order + ') \n';
 
     if(this.limit != undefined && this.limit !== null && Math.round(this.limit) > 0)
-        queryString += ' LIMIT ' + Math.round(this.limit) + '\n';
+        queryString += 'LIMIT ' + Math.round(this.limit) + ' \n';
 
     this.queryString = queryString;
     requestUrl += queryString;
