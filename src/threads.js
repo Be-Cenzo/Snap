@@ -828,16 +828,13 @@ Process.prototype.evaluateBlock = function (block, argCount) {
     inputs = this.context.inputs;
 
 
-    if (argCount > inputs.length && selector !== 'translateQueryBlock') {
+    if (argCount > inputs.length && selector) {
         // this.evaluateNextInput(block);
         this.evaluateNextInputSet(block); // frame-optimized version
     } else {
         if (this.flashContext()) {return; } // yield to flash the block
         if (this[selector]) {
             rcvr = this;
-        }
-        if (selector === 'translateQueryBlock'){
-            inputs = block.inputs();
         }
         if (this.isCatchingErrors) {
             try {

@@ -26,6 +26,8 @@
         LogicOperator
         Filter
         Query
+        QueryResult
+        SearchResult
 
 
     credits
@@ -52,16 +54,31 @@ var Subject;
 var LogicOperator;
 var Filter;
 var Query;
+var QueryResult;
+var SearchResult;
 
 // SpriteMorph ////////////////////////////////////////////////////////
 
 //new category define
 
 SpriteMorph.prototype.categories.push('KGQueries');
+//SpriteMorph.prototype.customCategories.set('KGQueries', new Color(153, 0, 0));
 
 SpriteMorph.prototype.blockColor['KGQueries'] = new Color(153, 0, 0);
 
 // new blocks define
+/*
+const oldInit = SpriteMorph.prototype.init;
+
+SpriteMorph.prototype.init = function(){
+    oldInit();
+    this.customBlocks["ssubject"] = {
+        type: 'command',
+        category: 'KGQueries',
+        spec: 'subject: %s %c',
+        defaults: [null, null]
+    };
+}*/
 
 const oldInitBlocks = SpriteMorph.prototype.initBlocks;
 
@@ -90,7 +107,7 @@ SpriteMorph.prototype.initBlocks = function (){
         type: 'reporter',
         category: 'KGQueries',
         spec: 'select %exp from %s %br where %c %br order by %s %ord %br limit %n',
-        defaults: [[], 'https://query.wikidata.org/sparql', null, 10, null, null]
+        defaults: ['?item', 'https://query.wikidata.org/sparql', null, 10, null, null]
     };
     SpriteMorph.prototype.blocks["literal"] = {
         type: 'reporter',
@@ -134,6 +151,12 @@ SpriteMorph.prototype.initBlocks = function (){
         spec: 'translate query block: %s',
         defaults: [null]
     };
+    SpriteMorph.prototype.blocks["executeQueryBlock"] = {
+        type: 'reporter',
+        category: 'KGQueries',
+        spec: 'execute query block: %s',
+        defaults: [null]
+    };
 
 };
 
@@ -170,6 +193,7 @@ SpriteMorph.prototype.blockTemplates = function (
         blocks.push(block('searchEntity'));
         blocks.push(block('searchProperty'));
         blocks.push('-');
+        blocks.push(block('executeQueryBlock'));
         blocks.push(block('translateQueryBlock'));
     }
 
@@ -192,16 +216,12 @@ SpriteMorph.prototype.queryBlock = function (vars, url, block, order, direction,
     try{
         endpoint = new WikiDataEndpoint('it', this);
         query = new Query(vars, endpoint, block, order, direction, limit);
-        preparedUrl = query.prepareRequest();
+        query.prepareRequest();
     }
     catch(e){
         return e.message;
     }
-    result = new XMLHttpRequest();
-    result.open('GET', preparedUrl, true);
-    result.send(null);
-    result.onreadystatechange = () => this.showResults(result, block);
-    return "Caricamento...";
+    return query;
 };
 
 // Creates a global variable named with de value of varName and containing value
@@ -226,16 +246,20 @@ SpriteMorph.prototype.createResultVar = function (varName, value){
 };
 
 //Handles readyState changes and showes query's results
-SpriteMorph.prototype.showResults = function (result, block){
+SpriteMorph.prototype.showResults = function (result){
+    let queryResults = null;
     if (result.readyState == 4 && result.status == 200) {
         response = JSON.parse(result.responseText);
         rows = response.results.bindings.length;
-        if(rows == 0){
-            block.showBubble(
+        if(rows === 0){
+            queryResults = new QueryResult(null, 1);
+            this.createResultVar('Results', queryResults);
+            this.showQueryResults('Results');
+            /*block.showBubble(
                 "Nessun risultato.",
                 null,
                 null
-            );
+            );*/
             return;
         }
         
@@ -252,20 +276,24 @@ SpriteMorph.prototype.showResults = function (result, block){
             }
         }
         
-        queryResults = {
+        /*queryResults = {
             rows: rows,
             cols: cols,
             resultTable: resultTable
-        };
+        };*/
+        queryResults = new QueryResult(resultTable, 0);
         this.createResultVar("Results", queryResults);
         this.showQueryResults("Results");
    }
    else if (result.readyState == 4 && result.status == 400) {
-        block.showBubble(
+        queryResults = new QueryResult(null, 2);
+        this.createResultVar('Results', queryResults);
+        this.showQueryResults('Results');
+        /*block.showBubble(
             "La query non è corretta.",
             null,
             null
-        );
+        );*/
     }
 };
 
@@ -287,98 +315,143 @@ SpriteMorph.prototype.showQueryResults = function(varName){
     ide = world.children[0];
     queryResults = ide.getVar(varName);
     console.log(queryResults);
-    tableMorph = new TableMorph(queryResults.resultTable);
-    tableDialogMorph = new TableDialogMorph(
-        tableMorph.table,
-        tableMorph.globalColWidth,
-        tableMorph.colWidths,
-        tableMorph.rowHeight
-    ).popUp(this.world());
-    console.log(tableMorph);
+    if(queryResults && queryResults.error === 0){
+        tableMorph = new TableMorph(queryResults.table);
+        tableDialogMorph = new TableDialogMorph(
+            tableMorph.table,
+            tableMorph.globalColWidth,
+            tableMorph.colWidths,
+            tableMorph.rowHeight
+        );
+        console.log("eccolo");
+        console.log(tableDialogMorph);
+
+        tableDialogMorph.userMenu = function () {
+            var menu = new MenuMorph(this);
+            menu.addItem(
+                'export',
+                () => ide.saveFileAs(
+                    JSON.stringify(queryResults),
+                    'text/plain;charset=utf-8',
+                    localize('data')
+                )
+            );
+            return menu;
+        };
+        tableDialogMorph.popUp(this.world());
+    }
+    else if(queryResults){
+        dialogBox = new DialogBoxMorph();
+        description = queryResults.toString();
+        dialogBox.inform('Results', description, world);
+    }
     return null;
 };
 
 // Allow the user to get a single column from a query result
 SpriteMorph.prototype.getColumn = function (index, varName){
     ide = world.children[0];
-    queryResults = ide.getVar(varName);
+    let queryResults = ide.getVar(varName);
     if(typeof(index) !== 'number')
         return queryResults;
-    table = queryResults.resultTable;
-    resultTable = new Table(1, queryResults.rows);
+    let table = queryResults.table;
+    let resultTable = new Table(1, table.rows());
     resultTable.setColName(-1, table.colName(index));
 
-    tableColumn = table.col(index);
+    let tableColumn = table.col(index);
     if(!tableColumn)
         return null;
-    for(i = 1; i<=queryResults.rows; i++){
+    for(i = 1; i<=table.rows(); i++){
         resultTable.set(tableColumn[i-1], 1, i);
     }
     console.log(table.col(index));
-    column = {
+    let column = new QueryResult(resultTable, 0);
+    /*let column = {
         cols: 1,
-        rows: queryResults.rows,
-        resultTable: resultTable
-    };
+        rows: table.rows(),
+        table: resultTable
+    };*/
     return column;
 };
 
 // Allow the user to get a single row from a query result
 SpriteMorph.prototype.getRow = function (index, varName){
     ide = world.children[0];
-    queryResults = ide.getVar(varName);
+    let queryResults = ide.getVar(varName);
     if(typeof(index) !== 'number')
         return queryResults;
-    table = queryResults.resultTable;
-    resultTable = new Table(queryResults.cols, 1);
+    let table = queryResults.table;
+    let resultTable = new Table(table.cols(), 1);
     resultTable.setColNames(table.columnNames());
 
-    tableRow = table.row(index);
+    let tableRow = table.row(index);
     if(!tableRow)
         return null;
-    for(i = 1; i<=queryResults.cols; i++){
+    for(i = 1; i<=table.cols(); i++){
         resultTable.set(tableRow[i-1], i, 1);
     }
     console.log(table.row(index));
-    row = {
-        cols: queryResults.cols,
+    let row = new QueryResult(resultTable, 0);
+    /*let row = {
+        cols: table.cols(),
         rows: 1,
         resultTable: resultTable
-    };
+    };*/
     return row;
 };
 
 // Allow the user to search for an entity in a knowledge graph
 SpriteMorph.prototype.searchEntity = function(search) {
-    endpoint = new WikiDataEndpoint('it', this);
+    let endpoint = new WikiDataEndpoint('it', this);
     endpoint.searchEntity(search, 'item');
+    return null;
 };
 
 // Allow the user to search for a property in a knowledge graph
 SpriteMorph.prototype.searchProperty = function(search) {
-    endpoint = new WikiDataEndpoint('it', this);
+    let endpoint = new WikiDataEndpoint('it', this);
     endpoint.searchEntity(search, 'property');
+    return null;
 };
 
 // show search results saved inside varName
 SpriteMorph.prototype.showSearchResults = function(varName){
     ide = world.children[0];
-    searchResults = ide.getVar(varName);
-    dialogBox = new DialogBoxMorph();
+    let searchResults = ide.getVar(varName);
+    let dialogBox = new DialogBoxMorph();
+    
     description = searchResults.label + '\n' + searchResults.description + '\n' + searchResults.concepturi;
     dialogBox.inform('Search Results', description, world);
+
+    // add a menu for exporting results
+    dialogBox.userMenu = function () {
+        var menu = new MenuMorph(this);
+        menu.addItem(
+            'export',
+            () => ide.saveFileAs(
+                JSON.stringify(searchResults),
+                'text/plain;charset=utf-8',
+                localize('data')
+            )
+        );
+        return menu;
+    };
     return null;
 };
 
 SpriteMorph.prototype.translateQueryBlock = function(block) {
-    console.log('ciaoneeee');
-    let endpoint = new WikiDataEndpoint('it', this);
-    let query = buildQueryFromQueryBlock(block, endpoint);
-    query.prepareRequest();
-    dialogBox = new DialogBoxMorph();
-    description = query.queryString;
+    let dialogBox = new DialogBoxMorph();
+    let description = block.queryString;
     dialogBox.inform('SPARQL Query', description, world);
-    return query.queryString;
+    return block.queryString;
+};
+
+SpriteMorph.prototype.executeQueryBlock = function(block) {
+    let result = new XMLHttpRequest();
+    result.open('GET', block.preparedUrl, true);
+    result.send(null);
+    result.onreadystatechange = () => this.showResults(result);
+    return "Caricamento...";
 };
 
 // StageMorph ///////////////////////////////////////////////////////////
@@ -505,6 +578,7 @@ WikiDataEndpoint.prototype.init = function(language, morph){
 };
 
 WikiDataEndpoint.prototype.searchEntity = function(search, type){
+    let searchResult = null;
     requestUrl = 'https://www.wikidata.org/w/api.php?action=wbsearchentities&language=' 
                 + this.language +'&uselang=' + this.language + '&type=' + type 
                 + '&format=json&origin=*&search=' + search;
@@ -513,22 +587,29 @@ WikiDataEndpoint.prototype.searchEntity = function(search, type){
     result.send(null);
     result.onreadystatechange = () => {
         json = JSON.parse(result.response);
-        if(json.search.length == 0)
-            return null;
-        first = json.search[0];
-        if(type === 'item')
-            dataType = 'entity';
-        else if(type === 'property')
-            dataType = 'property';
-        searchResult = {
-            id: first.id,
-            type: dataType,
-            label: first.display.label.value,
-            description: first.display.description.value,
-            concepturi: first.concepturi
-        };
+        if(json.search.length == 0) {
+            searchResult = new SearchResult(null, null, null, null, null, 1);
+        }
+        else {
+            first = json.search[0];
+            if(type === 'item')
+                dataType = 'entity';
+            else if(type === 'property')
+                dataType = 'property';
+            let label = first.display.label.value;
+            let description = first.display.description.value;
+            searchResult = new SearchResult(first.id, dataType, label, description, first.concepturi, 0);
+            /*searchResult = {
+                id: first.id,
+                type: dataType,
+                label: first.display.label.value,
+                description: first.display.description.value,
+                concepturi: first.concepturi
+            };*/
+        }
         this.morph.createResultVar('searchResult', searchResult);
         this.morph.showSearchResults('searchResult');
+        return;
     }
 };
 
@@ -629,9 +710,9 @@ Subject.prototype.getTriples = function(){
             triples += predicate + ' ';
             triples += object;
             if(i !== this.patternBlocks.length-1)
-                triples += ';';
+                triples += '; \n';
         }
-        triples += '.';
+        triples += '. \n';
     }
     console.log(triples);
     return triples;
@@ -754,7 +835,7 @@ function Filter(block){
 Filter.prototype.getFilter = function(){
     let logicOperator = new LogicOperator(this.block.children[1]);
     console.log(logicOperator.toString());
-    return ' FILTER (' + logicOperator.toString() + ')';
+    return 'FILTER (' + logicOperator.toString() + ')\n';
 }
 
 
@@ -769,6 +850,7 @@ function Query(vars, endpoint, firstBlock, order, direction, limit) {
     this.endpoint = endpoint;
     this.vars = vars;
     this.queryString = '';
+    this.preparedUrl = '';
     this.order = order;
     this.direction = direction;
     this.limit = limit;
@@ -816,18 +898,19 @@ Query.prototype.prepareRequest = function () {
     else
         throw new UnvalidBlockException('Parametri della select non validi');
 
-    queryString += 'WHERE {';
+    queryString += '\nWHERE {\n';
     queryString += this.getAllTriples();
-    queryString += ' SERVICE wikibase:label {bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en"}}';
+    queryString += 'SERVICE wikibase:label {bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en"}}\n';
     
     if(this.isOrdered())
-        queryString += ' ORDER BY ' + this.direction + '(' + this.order + ')';
+        queryString += ' ORDER BY ' + this.direction + '(' + this.order + ')\n';
 
     if(this.limit != undefined && this.limit !== null && Math.round(this.limit) > 0)
-        queryString += ' LIMIT ' + Math.round(this.limit);
+        queryString += ' LIMIT ' + Math.round(this.limit) + '\n';
 
     this.queryString = queryString;
     requestUrl += queryString;
+    this.preparedUrl = requestUrl;
     console.log(requestUrl);
     return requestUrl;
 };
@@ -844,6 +927,10 @@ Query.prototype.isOrdered = function() {
     else
         this.direction = this.direction[0];
     return true;
+}
+
+Query.prototype.toString = function(){
+    return this.queryString;
 }
 
 function buildQueryFromQueryBlock(queryBlock, endpoint){
@@ -885,4 +972,41 @@ function buildQueryFromQueryBlock(queryBlock, endpoint){
         limit = inputs[5].children[0].text;
 
     return new Query(selectVarsList, endpoint, firstBlock, order, direction, limit);
+}
+
+
+// QueryResult ///////////////////////////////////////////////////////////
+
+QueryResult.prototype.constructor = QueryResult;
+
+function QueryResult(table, error) {
+    this.table = table;
+    this.error = error; // 0 no-error, 1 no results, 2 wrong query
+};
+
+QueryResult.prototype.toString = function (){
+    if(this.error === 1)
+        return 'Nessun Risultato.';
+    if(this.error === 2)
+        return 'La query non è corretta.';
+    return this.table.rows() + ' risultati.';
+}
+
+// SearchResult ///////////////////////////////////////////////////////////
+
+SearchResult.prototype.constructor = SearchResult;
+
+function SearchResult(id, type, label, description, uri, error) {
+    this.id = id;
+    this.type = type;
+    this.label = label;
+    this.description = description;
+    this.concepturi = uri;
+    this.error = error; // 0 no-error, 1 no results, 2 wrong query
+};
+
+SearchResult.prototype.toString = function (){
+    if(this.error === 1)
+        return 'Nessun Risultato.';
+    return this.id;
 }
