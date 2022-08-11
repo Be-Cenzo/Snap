@@ -108,8 +108,8 @@ SpriteMorph.prototype.initBlocks = function (){
     SpriteMorph.prototype.blocks["queryBlock"] = {
         type: 'reporter',
         category: 'KGQueries',
-        spec: 'select %exp from %s %br where %c %br order by %s %ord %br limit %n',
-        defaults: ['?item', 'https://query.wikidata.org/sparql', null, 10, null, null]
+        spec: 'select %exp from %kg %br where %c %br order by %s %ord %br limit %n %br select a language: %s',
+        defaults: ['?item', 'https://query.wikidata.org/sparql', null, 10, null, null, 'it']
     };
     SpriteMorph.prototype.blocks["literal"] = {
         type: 'reporter',
@@ -226,9 +226,13 @@ SpriteMorph.prototype.dateElement = function(string){
     return stringLiteral;
 };
 
-SpriteMorph.prototype.queryBlock = function (vars, url, block, order, direction, limit) {
+SpriteMorph.prototype.queryBlock = function (vars, ep, block, order, direction, limit, lang) {
+    let endpoint = null;
+    let query = null;
     try{
-        endpoint = new WikiDataEndpoint('it', this);
+        if(!ep)
+            return 'Devi selezionare un endpoint.';
+        endpoint = new WikiDataEndpoint(lang, this);
         query = new Query(vars, endpoint, block, order, direction, limit);
         query.prepareRequest();
     }
@@ -329,7 +333,7 @@ SpriteMorph.prototype.showQueryResults = function(varName){
     ide = world.children[0];
     queryResults = ide.getVar(varName);
     console.log(queryResults);
-    if(queryResults && queryResults.error === 0){
+    if(queryResults && queryResults.table){
         tableMorph = new TableMorph(queryResults.table);
         tableDialogMorph = new TableDialogMorph(
             tableMorph.table,
@@ -345,15 +349,27 @@ SpriteMorph.prototype.showQueryResults = function(varName){
                 () => ide.saveFileAs(
                     JSON.stringify(queryResults),
                     'text/plain;charset=utf-8',
-                    localize('data')
+                    varName
                 )
             );
             return menu;
         };
         tableDialogMorph.popUp(this.world());
     }
-    else if(queryResults){
+    else if(queryResults || queryResults === 0 || queryResults === ''){
         dialogBox = new DialogBoxMorph();
+        dialogBox.userMenu = function () {
+            var menu = new MenuMorph(this);
+            menu.addItem(
+                'export',
+                () => ide.saveFileAs(
+                    JSON.stringify(queryResults),
+                    'text/plain;charset=utf-8',
+                    varName
+                )
+            );
+            return menu;
+        };
         description = queryResults.toString();
         dialogBox.inform('Results', description, world);
     }
@@ -436,8 +452,8 @@ SpriteMorph.prototype.showSearchResults = function(varName){
     let searchResults = ide.getVar(varName);
     let dialogBox = new DialogBoxMorph();
     
-    if(searchResults.error === 1)
-        description = "Nessun Risultato.";
+    if(searchResults.error === 1 || searchResults.error === 2)
+        description = searchResults.toString();
     else
         description = searchResults.label + '\n' + searchResults.description + '\n' + searchResults.concepturi;
     dialogBox.inform('Search Results', description, world);
@@ -558,13 +574,21 @@ StageMorph.prototype.executeQueryBlock
 // SyntaxElementMorph ///////////////////////////////////////////////////////////
 
 SyntaxElementMorph.prototype.labelParts['%ord'] = {
-        type: 'input',
-        tags: 'read-only static',
-        menu: {
-            'ASC' : ['ASC'],
-            'DESC' : ['DESC']
-        }
-    };
+    type: 'input',
+    tags: 'read-only static',
+    menu: {
+        'ASC' : ['ASC'],
+        'DESC' : ['DESC']
+    }
+};
+
+SyntaxElementMorph.prototype.labelParts['%kg'] = {
+    type: 'input',
+    tags: 'read-only static',
+    menu: {
+        'WikiData' : ['WikiData']
+    }
+};
 
 // Endpoint ///////////////////////////////////////////////////////////
 
@@ -580,6 +604,17 @@ Endpoint.prototype.init = function(baseUrl, language){
     this.baseUrl = baseUrl;
     this.language = language;
 };
+
+Endpoint.prototype.getLanguageFilters = function(vars) {
+    let filters = 'FILTER (';
+    for(i = 0; i<vars.length; i++){
+        filters += ' lang('+ vars[i] + ') = "' + this.language + '"';
+        if(i !== vars.length - 1)
+            filters += ' &&';
+    }
+    filters += ') \n';
+    return filters;
+}
 
 Endpoint.prototype.searchEntity = function(search){
     return search;
@@ -607,6 +642,10 @@ WikiDataEndpoint.prototype.init = function(language, morph){
     this.propertyPrefix = 'wdt:';
 };
 
+WikiDataEndpoint.prototype.getLanguageFilters = function(vars) {
+    return 'SERVICE wikibase:label {bd:serviceParam wikibase:language "' + this.language + ',en"} \n';
+}
+
 WikiDataEndpoint.prototype.searchEntity = function(search, type){
     let searchResult = null;
     requestUrl = 'https://www.wikidata.org/w/api.php?action=wbsearchentities&language=' 
@@ -616,30 +655,30 @@ WikiDataEndpoint.prototype.searchEntity = function(search, type){
     result.open('GET', requestUrl, true);
     result.send(null);
     result.onreadystatechange = () => {
-        json = JSON.parse(result.response);
-        if(json.search.length == 0) {
-            searchResult = new SearchResult(null, null, null, null, null, 1);
+        if (result.readyState == 4 && result.status == 200) {
+            json = JSON.parse(result.response);
+            if(json.search.length === 0) {
+                searchResult = new SearchResult(null, null, null, null, null, 1);
+            }
+            else {
+                first = json.search[0];
+                if(type === 'item')
+                    dataType = 'entity';
+                else if(type === 'property')
+                    dataType = 'property';
+                let label = first.display.label ? first.display.label.value : 'Empty';
+                let description = first.display.description ? first.display.description.value : 'Empty';
+                searchResult = new SearchResult(first.id, dataType, label, description, first.concepturi, 0);
+            }
+            this.morph.createResultVar('searchResult', searchResult);
+            this.morph.showSearchResults('searchResult');
+            return;
         }
-        else {
-            first = json.search[0];
-            if(type === 'item')
-                dataType = 'entity';
-            else if(type === 'property')
-                dataType = 'property';
-            let label = first.display.label.value;
-            let description = first.display.description.value;
-            searchResult = new SearchResult(first.id, dataType, label, description, first.concepturi, 0);
-            /*searchResult = {
-                id: first.id,
-                type: dataType,
-                label: first.display.label.value,
-                description: first.display.description.value,
-                concepturi: first.concepturi
-            };*/
+        else if(result.readyState == 4 && result.status == 400){
+            searchResult = new SearchResult(null, null, null, null, null, 2);
+            this.morph.createResultVar('searchResult', searchResult);
+            this.morph.showSearchResults('searchResult');
         }
-        this.morph.createResultVar('searchResult', searchResult);
-        this.morph.showSearchResults('searchResult');
-        return;
     }
 };
 
@@ -957,8 +996,9 @@ Query.prototype.prepareRequest = function () {
 
     queryString += '\nWHERE {\n';
     queryString += this.getAllTriples();
-    queryString += 'SERVICE wikibase:label {bd:serviceParam wikibase:language "' + this.endpoint.language + ',en"}} \n';
-    
+    queryString += this.endpoint.getLanguageFilters(this.vars.contents);
+    //queryString += 'SERVICE wikibase:label {bd:serviceParam wikibase:language "' + this.endpoint.language + ',en"}} \n';
+    queryString += '}\n'
     if(this.isOrdered())
         queryString += 'ORDER BY ' + this.direction + '(' + this.order + ') \n';
 
@@ -1059,11 +1099,13 @@ function SearchResult(id, type, label, description, uri, error) {
     this.label = label;
     this.description = description;
     this.concepturi = uri;
-    this.error = error; // 0 no-error, 1 no results, 2 wrong query
+    this.error = error; // 0 no-error, 1 no results, 2 generic error
 };
 
 SearchResult.prototype.toString = function (){
     if(this.error === 1)
         return 'Nessun Risultato.';
+    if(this.error === 2)
+        return 'Qualcosa è andato storto, riprova.'
     return this.id;
 }
