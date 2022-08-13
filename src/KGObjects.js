@@ -642,9 +642,9 @@ WikiDataEndpoint.prototype.init = function(language, morph){
     this.propertyPrefix = 'wdt:';
 };
 
-WikiDataEndpoint.prototype.getLanguageFilters = function(vars) {
+/*WikiDataEndpoint.prototype.getLanguageFilters = function(vars) {
     return 'SERVICE wikibase:label {bd:serviceParam wikibase:language "' + this.language + ',en"} \n';
-}
+}*/
 
 WikiDataEndpoint.prototype.searchEntity = function(search, type){
     let searchResult = null;
@@ -842,8 +842,9 @@ Subject.prototype.getSlotValue = function() {
 
 LogicOperator.prototype.constructor = LogicOperator;
 
-function LogicOperator(block){
+function LogicOperator(block, endpoint){
     this.block = block;
+    this.endpoint = endpoint;
     this.selector = block.selector;
     this.text = '';
     this.logicOperators = [];
@@ -869,7 +870,13 @@ LogicOperator.prototype.buildAll = function(){
         this.selector = 'plainText';
         let varName = this.block.blockSpec;
         let ide = world.children[0];
-        this.text = ide.getVar(varName);
+        let value =  ide.getVar(varName);
+        if(value.type === 'entity')
+            this.text = this.endpoint.entityPrefix + ide.getVar(varName);
+        else if(value.type === 'property')
+            this.text = this.endpoint.entityPrefix + ide.getVar(varName);
+        else
+            this.text = ide.getVar(varName);
     }
     else if(this.selector === 'reportAnd' ||
         this.selector === 'reportOr' ||
@@ -877,14 +884,14 @@ LogicOperator.prototype.buildAll = function(){
         this.selector === 'reportLessThan' ||
         this.selector === 'reportGreaterThan'){
             this.text = this.block.children[1].text;
-            let operator = new LogicOperator(this.block.children[0]);
+            let operator = new LogicOperator(this.block.children[0], this.endpoint);
             this.logicOperators.push(operator);
-            operator = new LogicOperator(this.block.children[2]);
+            operator = new LogicOperator(this.block.children[2], this.endpoint);
             this.logicOperators.push(operator);
     }
     else if(this.selector === 'reportNot'){
         this.text = this.block.children[0].text;
-        let operator = new LogicOperator(this.block.children[1]);
+        let operator = new LogicOperator(this.block.children[1], this.endpoint);
         this.logicOperators.push(operator);
     }
     else {
@@ -924,12 +931,13 @@ LogicOperator.prototype.toString = function(){
 
 Filter.prototype.constructor = Filter;
 
-function Filter(block){
+function Filter(block, endpoint){
     this.block = block;
+    this.endpoint = endpoint;
 }
 
 Filter.prototype.getFilter = function(){
-    let logicOperator = new LogicOperator(this.block.children[1]);
+    let logicOperator = new LogicOperator(this.block.children[1], this.endpoint);
     console.log(logicOperator.toString());
     return 'FILTER (' + logicOperator.toString() + ') \n';
 }
@@ -957,7 +965,7 @@ function Query(vars, endpoint, firstBlock, order, direction, limit) {
             this.subjectBlocks.push(subject);
         }
         else if(block.selector === 'filter'){
-            let filter = new Filter(block);
+            let filter = new Filter(block, endpoint);
             this.filterBlocks.push(filter);
         }
         else {
@@ -996,7 +1004,7 @@ Query.prototype.prepareRequest = function () {
 
     queryString += '\nWHERE {\n';
     queryString += this.getAllTriples();
-    queryString += this.endpoint.getLanguageFilters(this.vars.contents);
+    //queryString += this.endpoint.getLanguageFilters(this.vars.contents);
     //queryString += 'SERVICE wikibase:label {bd:serviceParam wikibase:language "' + this.endpoint.language + ',en"}} \n';
     queryString += '}\n'
     if(this.isOrdered())
