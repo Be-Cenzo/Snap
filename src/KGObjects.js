@@ -108,7 +108,7 @@ SpriteMorph.prototype.initBlocks = function (){
     SpriteMorph.prototype.blocks["queryBlock"] = {
         type: 'reporter',
         category: 'KGQueries',
-        spec: 'select %exp from %kg %br where %c %br order by %s %ord %br limit %n %br select a language: %s',
+        spec: 'select distinct %exp from %kg %br where %c %br order by %s %ord %br limit %n %br select a language: %s',
         defaults: ['?item', 'https://query.wikidata.org/sparql', null, 10, null, null, 'it']
     };
     SpriteMorph.prototype.blocks["literal"] = {
@@ -165,6 +165,18 @@ SpriteMorph.prototype.initBlocks = function (){
         spec: 'execute query block: %s',
         defaults: [null]
     };
+    SpriteMorph.prototype.blocks["languageOf"] = {
+        type: 'reporter',
+        category: 'KGQueries',
+        spec: 'language of: %s is %s',
+        defaults: [null, 'en']
+    };
+    SpriteMorph.prototype.blocks["label"] = {
+        type: 'reporter',
+        category: 'KGQueries',
+        spec: 'rdfs:label',
+        defaults: []
+    };
 
 };
 
@@ -195,6 +207,8 @@ SpriteMorph.prototype.blockTemplates = function (
         blocks.push(block('literal'));
         blocks.push(block('dateElement'));
         blocks.push(block('filter'));
+        blocks.push(block('languageOf'));
+        blocks.push(block('label'));
         blocks.push('-');
         blocks.push(block('getColumn'));
         blocks.push(block('getRow'));
@@ -345,9 +359,17 @@ SpriteMorph.prototype.showQueryResults = function(varName){
         tableDialogMorph.userMenu = function () {
             var menu = new MenuMorph(this);
             menu.addItem(
-                'export',
+                'export as JSON',
                 () => ide.saveFileAs(
                     JSON.stringify(queryResults),
+                    'text/plain;charset=utf-8',
+                    varName
+                )
+            );
+            menu.addItem(
+                'export as CSV',
+                () => ide.saveFileAs(
+                    queryResults.toCSV(),
                     'text/plain;charset=utf-8',
                     varName
                 )
@@ -518,6 +540,8 @@ StageMorph.prototype.blockTemplates = function (
         blocks.push(block('literal'));
         blocks.push(block('dateElement'));
         blocks.push(block('filter'));
+        blocks.push(block('languageOf'));
+        blocks.push(block('label'));
         blocks.push('-');
         blocks.push(block('getColumn'));
         blocks.push(block('getRow'));
@@ -549,6 +573,15 @@ StageMorph.prototype.showResults
 
 StageMorph.prototype.showQueryResults 
     = SpriteMorph.prototype.showQueryResults;
+    
+StageMorph.prototype.filter 
+    = SpriteMorph.prototype.filter;
+
+StageMorph.prototype.languageOf 
+    = SpriteMorph.prototype.languageOf;
+    
+StageMorph.prototype.label 
+= SpriteMorph.prototype.label;
 
 StageMorph.prototype.getColumn 
     = SpriteMorph.prototype.getColumn;
@@ -681,6 +714,38 @@ WikiDataEndpoint.prototype.searchEntity = function(search, type){
         }
     }
 };
+
+// QueryFunction ///////////////////////////////////////////////////////////
+
+QueryFunction.prototype.constructor = QueryFunction;
+
+function QueryFunction(block){
+    this.block = block;
+    this.type = '';
+    if(block.selector === 'languageOf')
+        this.type = 'lang';
+}
+
+QueryFunction.prototype.getValue = function (){
+    console.log(this.block);
+    let stringLiteral = '';
+    if(this.type === 'lang')
+        stringLiteral += 'LANG(' + this.getSlotValue(2) + ') = "' + this.getSlotValue(4) + '"';
+    return stringLiteral;
+}
+
+QueryFunction.prototype.getSlotValue = function(index){
+    let slot = this.block.children[index];
+    console.log("slot[" + index +"]: ");
+    console.log(slot);
+    if(slot.selector === 'reportGetVar'){
+        let varName = slot.blockSpec;
+        let ide = world.children[0];
+        let variable = ide.getVar(varName);
+        return variable;
+    }
+    else return slot.children[0].text;
+}
 
 // Literal ///////////////////////////////////////////////////////////
 
@@ -856,6 +921,11 @@ LogicOperator.prototype.buildAll = function(){
         this.selector = 'plainText';
         this.text = this.block.children[0].text;
     }
+    else if(this.selector === 'languageOf'){
+        this.selector = 'plainText';
+        let fun = new QueryFunction(this.block);
+        this.text = fun.getValue();
+    }
     else if(this.selector === 'literal'){
         this.selector = 'plainText';
         let literal = new Literal(this.block);
@@ -990,7 +1060,7 @@ Query.prototype.getAllTriples = function () {
 
 Query.prototype.prepareRequest = function () {
     let requestUrl = this.endpoint.baseUrl + '?format=json&query=';
-    let queryString = 'SELECT ';
+    let queryString = 'SELECT DISTINCT';
     console.log(this);
 
     if(this.vars.contents.length > 0 && this.vars.contents[0] !== ''){
@@ -1095,6 +1165,27 @@ QueryResult.prototype.toString = function (){
     if(this.error === 2)
         return 'La query non è corretta.';
     return this.table.rows() + ' risultati.';
+}
+
+QueryResult.prototype.toCSV = function(){
+    let csv = '';
+    if(!this.table)
+        return csv;
+    csv += this.rowToCSV(this.table.columnNames());
+    for(let i = 1; i <= this.table.rows(); i++)
+        csv += this.rowToCSV(this.table.row(i));
+    return csv;
+}
+
+QueryResult.prototype.rowToCSV = function(row){
+    let str = '';
+    for(let i = 0; i < row.length; i++){
+        str += row[i];
+        if(i !== row.length - 1)
+            str += ',';
+    }
+    str += '\n';
+    return str;
 }
 
 // SearchResult ///////////////////////////////////////////////////////////
