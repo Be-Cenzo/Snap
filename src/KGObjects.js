@@ -271,13 +271,13 @@ SpriteMorph.prototype.queryBlock = function (vars, ep, block, order, direction, 
 // Creates a global variable named with de value of varName and containing value
 // it also adds a watcher to the stage
 SpriteMorph.prototype.createResultVar = function (varName, value){
-    ide = world.children[0];
-    scene = ide.scene;
-    stage = this.parentThatIsA(StageMorph);
+    let ide = world.children[0];
+    let scene = ide.scene;
+    let stage = this.parentThatIsA(StageMorph);
     scene.globalVariables.addVar(varName, value);
     ide.flushBlocksCache('variables');
     ide.refreshPalette();
-    watcher = this.findVariableWatcher(varName);
+    let watcher = this.findVariableWatcher(varName);
     if (watcher !== null) {
         watcher.show();
         watcher.fixLayout(); // re-hide hidden parts
@@ -293,8 +293,8 @@ SpriteMorph.prototype.createResultVar = function (varName, value){
 SpriteMorph.prototype.showResults = function (result){
     let queryResults = null;
     if (result.readyState == 4 && result.status == 200) {
-        response = JSON.parse(result.responseText);
-        rows = response.results.bindings.length;
+        let response = JSON.parse(result.responseText);
+        let rows = response.results.bindings.length;
         if(rows === 0){
             queryResults = new QueryResult(null, 1);
             this.createResultVar('Results', queryResults);
@@ -307,9 +307,9 @@ SpriteMorph.prototype.showResults = function (result){
             return;
         }
         
-        entry = Object.entries(response.results.bindings[0]);
-        cols = entry.length;
-        resultTable = new Table(cols, rows);
+        let entry = Object.entries(response.results.bindings[0]);
+        let cols = entry.length;
+        let resultTable = new Table(cols, rows);
         for(i = 0; i<cols; i++)
             resultTable.setColName(i-1, entry[i][0]);
         
@@ -345,23 +345,14 @@ function UnvalidBlockException(message){
     this.message = message;
 };
 
-//builds the request url starting from the first block
-prepareRequest = function(vars, url, block, limit, order, direction) {
-    endpoint = new WikiDataEndpoint('it', this);
-    query = new Query(vars, endpoint, block, limit, order, direcrion);
-    console.log('query');
-    console.log(query);
-    return query.prepareRequest();
-};
-
 //shows query results saved inside varName
 SpriteMorph.prototype.showQueryResults = function(varName){
-    ide = world.children[0];
-    queryResults = ide.getVar(varName);
+    let ide = world.children[0];
+    let queryResults = ide.getVar(varName);
     console.log(queryResults);
     if(queryResults && queryResults.table){
-        tableMorph = new TableMorph(queryResults.table);
-        tableDialogMorph = new TableDialogMorph(
+        let tableMorph = new TableMorph(queryResults.table);
+        let tableDialogMorph = new TableDialogMorph(
             tableMorph.table,
             tableMorph.globalColWidth,
             tableMorph.colWidths,
@@ -391,7 +382,7 @@ SpriteMorph.prototype.showQueryResults = function(varName){
         tableDialogMorph.popUp(this.world());
     }
     else if(queryResults || queryResults === 0 || queryResults === ''){
-        dialogBox = new DialogBoxMorph();
+        let dialogBox = new DialogBoxMorph();
         dialogBox.userMenu = function () {
             var menu = new MenuMorph(this);
             menu.addItem(
@@ -404,7 +395,7 @@ SpriteMorph.prototype.showQueryResults = function(varName){
             );
             return menu;
         };
-        description = queryResults.toString();
+        let description = queryResults.toString();
         dialogBox.inform('Results', description, world);
     }
     return 'Mostro i risultati.';
@@ -412,7 +403,7 @@ SpriteMorph.prototype.showQueryResults = function(varName){
 
 // Allow the user to get a single column from a query result
 SpriteMorph.prototype.getColumn = function (index, varName){
-    ide = world.children[0];
+    let ide = world.children[0];
     let queryResults = ide.getVar(varName);
     if(typeof(index) !== 'number')
         return queryResults;
@@ -423,7 +414,7 @@ SpriteMorph.prototype.getColumn = function (index, varName){
     resultTable.setColName(-1, table.colName(index));
 
     let tableColumn = table.col(index);
-    if(!tableColumn)
+    if(index > table.cols() || index < 1)
         return new QueryResult(null, 1);
     for(i = 1; i<=table.rows(); i++){
         resultTable.set(tableColumn[i-1], 1, i);
@@ -440,7 +431,7 @@ SpriteMorph.prototype.getColumn = function (index, varName){
 
 // Allow the user to get a single row from a query result
 SpriteMorph.prototype.getRow = function (index, varName){
-    ide = world.children[0];
+    let ide = world.children[0];
     let queryResults = ide.getVar(varName);
     if(typeof(index) !== 'number')
         return queryResults;
@@ -451,7 +442,7 @@ SpriteMorph.prototype.getRow = function (index, varName){
     resultTable.setColNames(table.columnNames());
 
     let tableRow = table.row(index);
-    if(!tableRow)
+    if(index > table.rows() || index < 1)
         return new QueryResult(null, 1);
     for(i = 1; i<=table.cols(); i++){
         resultTable.set(tableRow[i-1], i, 1);
@@ -482,10 +473,11 @@ SpriteMorph.prototype.searchProperty = function(search, lang) {
 
 // show search results saved inside varName
 SpriteMorph.prototype.showSearchResults = function(varName){
-    ide = world.children[0];
+    let ide = world.children[0];
     let searchResults = ide.getVar(varName);
     let dialogBox = new DialogBoxMorph();
     
+    let description = '';
     if(searchResults.error === 1 || searchResults.error === 2)
         description = searchResults.toString();
     else
@@ -712,7 +704,8 @@ WikiDataEndpoint.prototype.init = function(language, morph){
 
 WikiDataEndpoint.prototype.searchEntity = function(search, type){
     let searchResult = null;
-    requestUrl = 'https://www.wikidata.org/w/api.php?action=wbsearchentities&language=' 
+    let json = null;
+    let requestUrl = 'https://www.wikidata.org/w/api.php?action=wbsearchentities&language=' 
                 + this.language +'&uselang=' + this.language + '&type=' + type 
                 + '&format=json&origin=*&search=' + search;
     let result = new XMLHttpRequest();
@@ -725,7 +718,7 @@ WikiDataEndpoint.prototype.searchEntity = function(search, type){
                 searchResult = new SearchResult(null, null, null, null, null, 1);
             }
             else {
-                first = json.search[0];
+                let first = json.search[0];
                 if(type === 'item')
                     dataType = 'entity';
                 else if(type === 'property')
@@ -876,7 +869,7 @@ function Subject(rootBlock, endpoint){
     this.endpoint = endpoint;
     this.patternBlocks = [];
     this.varValue = this.getSlotValue();
-    inputs = rootBlock.inputs();
+    let inputs = rootBlock.inputs();
     let block = inputs[1].inputs()[0];
     while(block){
         if(block.selector !== 'pattern'){
@@ -890,9 +883,13 @@ function Subject(rootBlock, endpoint){
 };
 
 Subject.prototype.getTriples = function(){
+    let patternBlock = null;
+    let predicate = null;
+    let object = null;
+    let triples = null;
     if(this.rootBlock !== null && this.rootBlock.selector === 'subject'){
         console.log(this.rootBlock);
-        subjectValue = this.varValue;
+        let subjectValue = this.varValue;
         triples = subjectValue + ' ';
         for(let i = 0; i<this.patternBlocks.length; i++){
             patternBlock = this.patternBlocks[i];
@@ -954,7 +951,10 @@ function LogicOperator(block, endpoint){
 LogicOperator.prototype.buildAll = function(){
     if(this.selector === undefined){
         this.selector = 'plainText';
-        this.text = this.block.allEntryFields()[0].text;
+        let entryField = this.block.allEntryFields();
+        if(entryField.length === 0)
+            throw new UnvalidBlockException('I blocchi inseriti non sono validi');
+        this.text = entryField[0].text;
     }
     else if(this.selector === 'languageOf'){
         this.selector = 'plainText';
@@ -1151,7 +1151,7 @@ Query.prototype.encodeQuery = function(query){
 
 function buildQueryFromQueryBlock(queryBlock, endpoint){
     let inputs = queryBlock.inputs();
-    selectInputs = inputs[0].inputs();
+    let selectInputs = inputs[0].inputs();
     let selectInputVars = [];
     ide = world.children[0];
 
