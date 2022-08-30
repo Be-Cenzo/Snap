@@ -108,8 +108,8 @@ SpriteMorph.prototype.initBlocks = function (){
     SpriteMorph.prototype.blocks["queryBlock"] = {
         type: 'reporter',
         category: 'KGQueries',
-        spec: 'select distinct %exp from %kg %br where %c %br order by %s %ord %br limit %n %br select a language: %s',
-        defaults: ['?item', 'https://query.wikidata.org/sparql', null, 10, null, null, 'it']
+        spec: 'select distinct %exp %br from %kg %br where %c %br order by %s %ord %br limit %n',
+        defaults: ['?item', null, null, null, null, 10]
     };
     SpriteMorph.prototype.blocks["literal"] = {
         type: 'reporter',
@@ -240,13 +240,25 @@ SpriteMorph.prototype.dateElement = function(string){
     return stringLiteral;
 };
 
-SpriteMorph.prototype.queryBlock = function (vars, ep, block, order, direction, limit, lang) {
+SpriteMorph.prototype.subject = function(subject, patternBlock){
+    return subject;
+};
+
+SpriteMorph.prototype.pattern = function(predicate, object){
+    return predicate + ' ' + object;
+};
+
+SpriteMorph.prototype.filter = function(element){
+    return element;
+};
+
+SpriteMorph.prototype.queryBlock = function (vars, ep, block, order, direction, limit) {
     let endpoint = null;
     let query = null;
     try{
         if(!ep)
             return 'Devi selezionare un endpoint.';
-        endpoint = new WikiDataEndpoint(lang, this);
+        endpoint = new WikiDataEndpoint(null, this);
         query = new Query(vars, endpoint, block, order, direction, limit);
         query.prepareRequest();
     }
@@ -395,7 +407,7 @@ SpriteMorph.prototype.showQueryResults = function(varName){
         description = queryResults.toString();
         dialogBox.inform('Results', description, world);
     }
-    return null;
+    return 'Mostro i risultati.';
 };
 
 // Allow the user to get a single column from a query result
@@ -458,14 +470,14 @@ SpriteMorph.prototype.getRow = function (index, varName){
 SpriteMorph.prototype.searchEntity = function(search, lang) {
     let endpoint = new WikiDataEndpoint(lang, this);
     endpoint.searchEntity(search, 'item');
-    return null;
+    return 'Caricamento...';
 };
 
 // Allow the user to search for a property in a knowledge graph
 SpriteMorph.prototype.searchProperty = function(search, lang) {
     let endpoint = new WikiDataEndpoint(lang, this);
     endpoint.searchEntity(search, 'property');
-    return null;
+    return 'Caricamento...';
 };
 
 // show search results saved inside varName
@@ -499,6 +511,19 @@ SpriteMorph.prototype.showSearchResults = function(varName){
 SpriteMorph.prototype.translateQueryBlock = function(block) {
     let dialogBox = new DialogBoxMorph();
     let description = block.queryString;
+    // add a menu for exporting results
+    dialogBox.userMenu = function () {
+        var menu = new MenuMorph(this);
+        menu.addItem(
+            'export',
+            () => ide.saveFileAs(
+                description,
+                'text/plain;charset=utf-8',
+                localize('SPARQLQuery')
+            )
+        );
+        return menu;
+    };
     dialogBox.inform('SPARQL Query', description, world);
     return block.queryString;
 };
@@ -561,6 +586,12 @@ StageMorph.prototype.literal
 
 StageMorph.prototype.dateElement 
     = SpriteMorph.prototype.dateElement;
+    
+StageMorph.prototype.subject 
+= SpriteMorph.prototype.subject;
+
+StageMorph.prototype.pattern 
+    = SpriteMorph.prototype.pattern;
 
 StageMorph.prototype.queryBlock 
     = SpriteMorph.prototype.queryBlock;
@@ -638,7 +669,7 @@ Endpoint.prototype.init = function(baseUrl, language){
     this.language = language;
 };
 
-Endpoint.prototype.getLanguageFilters = function(vars) {
+/*Endpoint.prototype.getLanguageFilters = function(vars) {
     let filters = 'FILTER (';
     for(i = 0; i<vars.length; i++){
         filters += ' lang('+ vars[i] + ') = "' + this.language + '"';
@@ -647,7 +678,7 @@ Endpoint.prototype.getLanguageFilters = function(vars) {
     }
     filters += ') \n';
     return filters;
-}
+}*/
 
 Endpoint.prototype.searchEntity = function(search){
     return search;
@@ -684,7 +715,7 @@ WikiDataEndpoint.prototype.searchEntity = function(search, type){
     requestUrl = 'https://www.wikidata.org/w/api.php?action=wbsearchentities&language=' 
                 + this.language +'&uselang=' + this.language + '&type=' + type 
                 + '&format=json&origin=*&search=' + search;
-    result = new XMLHttpRequest();
+    let result = new XMLHttpRequest();
     result.open('GET', requestUrl, true);
     result.send(null);
     result.onreadystatechange = () => {
@@ -730,12 +761,12 @@ QueryFunction.prototype.getValue = function (){
     console.log(this.block);
     let stringLiteral = '';
     if(this.type === 'lang')
-        stringLiteral += 'LANG(' + this.getSlotValue(2) + ') = "' + this.getSlotValue(4) + '"';
+        stringLiteral += 'LANG(' + this.getSlotValue(0) + ') = "' + this.getSlotValue(1) + '"';
     return stringLiteral;
 }
 
 QueryFunction.prototype.getSlotValue = function(index){
-    let slot = this.block.children[index];
+    let slot = this.block.inputs()[index];
     console.log("slot[" + index +"]: ");
     console.log(slot);
     if(slot.selector === 'reportGetVar'){
@@ -744,7 +775,7 @@ QueryFunction.prototype.getSlotValue = function(index){
         let variable = ide.getVar(varName);
         return variable;
     }
-    else return slot.children[0].text;
+    else return slot.allEntryFields()[0].text;
 }
 
 // Literal ///////////////////////////////////////////////////////////
@@ -759,7 +790,7 @@ Literal.prototype.getValue = function (){
     console.log(this.block);
     let stringLiteral = '"';
     stringLiteral += this.getSlotValue(0) + '"';
-    let lang = this.block.children[2].children[0].text;
+    let lang = this.getSlotValue(1);
     if(lang !== undefined &&
         lang !== null &&
         lang !== '')
@@ -768,7 +799,8 @@ Literal.prototype.getValue = function (){
 }
 
 Literal.prototype.getSlotValue = function(index){
-    let slot = this.block.children[index];
+    //let slot = this.block.children[index];
+    let slot = this.block.inputs()[index];
     console.log("slot: ");
     console.log(slot);
     if(slot.selector === 'reportGetVar'){
@@ -777,7 +809,7 @@ Literal.prototype.getSlotValue = function(index){
         let variable = ide.getVar(varName);
         return variable;
     }
-    else return slot.children[0].text;
+    else return slot.allEntryFields()[0].text;
 }
 
 // DateElement ///////////////////////////////////////////////////////////
@@ -793,7 +825,7 @@ function DateElement(block){
 DateElement.prototype.getValue = function (){
     console.log(this.block);
     let stringLiteral = '"';
-    stringLiteral += this.getSlotValue(1) + '"';
+    stringLiteral += this.getSlotValue(0) + '"';
     stringLiteral += "^^xsd:dateTime";
     return stringLiteral;
 }
@@ -805,13 +837,13 @@ Pattern.prototype.constructor = Pattern;
 function Pattern(block, endpoint){
     this.block = block;
     this.endpoint = endpoint;
-    this.propertyValue = this.getSlotValue(1);
-    this.entityValue = this.getSlotValue(3);
+    this.propertyValue = this.getSlotValue(0);
+    this.entityValue = this.getSlotValue(1);
 }
 
 //index is the slot's position index which we want to get the value
 Pattern.prototype.getSlotValue = function(index){
-    let slot = this.block.children[index];
+    let slot = this.block.inputs()[index];
     console.log(slot);
     if(slot.category === 'variables'){
         let varName = slot.blockSpec;
@@ -829,7 +861,10 @@ Pattern.prototype.getSlotValue = function(index){
     else if(slot.selector === 'dateElement'){
         return new DateElement(slot).getValue();
     }
-    else return slot.children[0].text;
+    else if(slot.selector === 'label'){
+        return 'rdfs:label';
+    }
+    else return slot.allEntryFields()[0].text;
 }
 
 // Subject ///////////////////////////////////////////////////////////
@@ -842,7 +877,7 @@ function Subject(rootBlock, endpoint){
     this.patternBlocks = [];
     this.varValue = this.getSlotValue();
     inputs = rootBlock.inputs();
-    let block = inputs[1].children[0];
+    let block = inputs[1].inputs()[0];
     while(block){
         if(block.selector !== 'pattern'){
             this.patternBlocks = [];
@@ -875,7 +910,7 @@ Subject.prototype.getTriples = function(){
 };
 
 Subject.prototype.getSlotValue = function() {
-    let slot = this.rootBlock.children[1];
+    let slot = this.rootBlock.inputs()[0];
     if(slot.category === 'variables'){
         let varName = slot.blockSpec;
         let ide = world.children[0];
@@ -886,7 +921,7 @@ Subject.prototype.getSlotValue = function() {
             return this.endpoint.propertyPrefix + variable.id;
         return variable;
     }
-    else return slot.children[0].text;
+    else return slot.allEntryFields()[0].text;
 }
 
 /*var getParameterAsVariable = (varName, type) => {
@@ -919,7 +954,7 @@ function LogicOperator(block, endpoint){
 LogicOperator.prototype.buildAll = function(){
     if(this.selector === undefined){
         this.selector = 'plainText';
-        this.text = this.block.children[0].text;
+        this.text = this.block.allEntryFields()[0].text;
     }
     else if(this.selector === 'languageOf'){
         this.selector = 'plainText';
@@ -954,14 +989,14 @@ LogicOperator.prototype.buildAll = function(){
         this.selector === 'reportLessThan' ||
         this.selector === 'reportGreaterThan'){
             this.text = this.block.children[1].text;
-            let operator = new LogicOperator(this.block.children[0], this.endpoint);
+            let operator = new LogicOperator(this.block.inputs()[0], this.endpoint);
             this.logicOperators.push(operator);
-            operator = new LogicOperator(this.block.children[2], this.endpoint);
+            operator = new LogicOperator(this.block.inputs()[1], this.endpoint);
             this.logicOperators.push(operator);
     }
     else if(this.selector === 'reportNot'){
         this.text = this.block.children[0].text;
-        let operator = new LogicOperator(this.block.children[1], this.endpoint);
+        let operator = new LogicOperator(this.block.inputs()[0], this.endpoint);
         this.logicOperators.push(operator);
     }
     else {
@@ -986,9 +1021,9 @@ LogicOperator.prototype.toString = function(){
         string += this.logicOperators[1].toString() + ')';
     }
     else if(this.selector === 'reportOr'){
-        string += this.logicOperators[0].toString();
+        string += '(' + this.logicOperators[0].toString();
         string += ' || ';
-        string += this.logicOperators[1].toString();
+        string += this.logicOperators[1].toString() + ')';
     }
     else if(this.logicOperators.length === 1){
         string += '!(';
@@ -1007,7 +1042,7 @@ function Filter(block, endpoint){
 }
 
 Filter.prototype.getFilter = function(){
-    let logicOperator = new LogicOperator(this.block.children[1], this.endpoint);
+    let logicOperator = new LogicOperator(this.block.inputs()[0], this.endpoint);
     console.log(logicOperator.toString());
     return 'FILTER (' + logicOperator.toString() + ') \n';
 }
@@ -1060,7 +1095,7 @@ Query.prototype.getAllTriples = function () {
 
 Query.prototype.prepareRequest = function () {
     let requestUrl = this.endpoint.baseUrl + '?format=json&query=';
-    let queryString = 'SELECT DISTINCT';
+    let queryString = 'SELECT DISTINCT ';
     console.log(this);
 
     if(this.vars.contents.length > 0 && this.vars.contents[0] !== ''){
@@ -1084,7 +1119,7 @@ Query.prototype.prepareRequest = function () {
         queryString += 'LIMIT ' + Math.round(this.limit) + ' \n';
 
     this.queryString = queryString;
-    requestUrl += queryString;
+    requestUrl += this.encodeQuery(queryString);
     this.preparedUrl = requestUrl;
     console.log(requestUrl);
     return requestUrl;
@@ -1106,6 +1141,12 @@ Query.prototype.isOrdered = function() {
 
 Query.prototype.toString = function(){
     return this.queryString;
+}
+
+Query.prototype.encodeQuery = function(query){
+    let encoded = query.replaceAll('&', '%26');
+    console.log(encoded);
+    return encoded;
 }
 
 function buildQueryFromQueryBlock(queryBlock, endpoint){
