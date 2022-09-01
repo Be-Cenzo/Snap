@@ -45,8 +45,6 @@ modules.KGObjects = '2022-July-10';
 
 // Declarations
 
-var SnapVersion = '7.4.0-dev';
-
 var Endpoint;
 var WikiDataEndpoint;
 var Literal;
@@ -63,29 +61,27 @@ var SearchResult;
 
 //new category define
 
+/*      if normal categories could work
 SpriteMorph.prototype.categories.push('KGQueries');
-//SpriteMorph.prototype.customCategories.set('KGQueries', new Color(153, 0, 0));
-
 SpriteMorph.prototype.blockColor['KGQueries'] = new Color(153, 0, 0);
+*/
+
+// Using custom categories
+const oldAddDefaultScene = Project.prototype.addDefaultScene;
+
+Project.prototype.addDefaultScene = function () {
+    oldAddDefaultScene.apply(this);
+    let scena = this.scenes.at(1);
+    scena.customCategories.set('KGQueries', new Color(153, 0, 0));
+};
 
 // new blocks define
-/*
-const oldInit = SpriteMorph.prototype.init;
-
-SpriteMorph.prototype.init = function(){
-    oldInit();
-    this.customBlocks["ssubject"] = {
-        type: 'command',
-        category: 'KGQueries',
-        spec: 'subject: %s %c',
-        defaults: [null, null]
-    };
-}*/
-
 const oldInitBlocks = SpriteMorph.prototype.initBlocks;
 
 SpriteMorph.prototype.initBlocks = function (){
     oldInitBlocks();
+    SpriteMorph.prototype.customCategories.set('KGQueries', new Color(153, 0, 0));
+    IDE_Morph.prototype.loadNewProject = false;
 
     SpriteMorph.prototype.blocks["subject"] = {
         type: 'command',
@@ -180,6 +176,8 @@ SpriteMorph.prototype.initBlocks = function (){
 
 };
 
+SpriteMorph.prototype.initBlocks();
+
 SpriteMorph.prototype.oldBlockTemplates = SpriteMorph.prototype.blockTemplates;
 
 SpriteMorph.prototype.blockTemplates = function (
@@ -222,7 +220,6 @@ SpriteMorph.prototype.blockTemplates = function (
 
     return blocks;
 };
-
 
 // selector define for the new blocks
 
@@ -645,6 +642,7 @@ SyntaxElementMorph.prototype.labelParts['%kg'] = {
         'WikiData' : ['WikiData']
     }
 };
+
 
 // Endpoint ///////////////////////////////////////////////////////////
 

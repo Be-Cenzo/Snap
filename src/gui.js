@@ -1448,7 +1448,7 @@ IDE_Morph.prototype.createCategories = function () {
             button.setPosition(new Point(
                 l + (col * xPadding + ((col - 1) * buttonWidth)),
                 t + ((row + 1) * yPadding + (row * buttonHeight) + border) +
-                    (i > 8 ? border + 2 : 0)
+                    (i > 7 ? border + 2 : 0)
             ));
         });
 
@@ -1470,14 +1470,14 @@ IDE_Morph.prototype.createCategories = function () {
             myself.categories.scroller = scroller;
             myself.categories.setHeight(
                 (4 + 1) * yPadding
-                    + 5 * buttonHeight
+                    + 4 * buttonHeight
                     + 6 * (yPadding + buttonHeight) + border + 2
                     + 2 * border
             );
         } else {
             myself.categories.setHeight(
                 (4 + 1) * yPadding
-                    + 5 * buttonHeight
+                    + 4 * buttonHeight
                     + (more ?
                         (more * (yPadding + buttonHeight) + border + 2)
                             : 0)
