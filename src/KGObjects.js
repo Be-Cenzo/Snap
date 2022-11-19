@@ -61,14 +61,7 @@ var SearchResult;
 
 // SpriteMorph ////////////////////////////////////////////////////////
 
-//new category define
-
-/*      if normal categories could work
-SpriteMorph.prototype.categories.push('KGQueries');
-SpriteMorph.prototype.blockColor['KGQueries'] = new Color(153, 0, 0);
-*/
-
-// Using custom categories
+// defining a new custom category
 SpriteMorph.prototype.customCategories.set('KGQueries', new Color(153, 0, 0));
 
 const originalAddDefaultScene = Project.prototype.addDefaultScene;
@@ -278,7 +271,7 @@ SpriteMorph.prototype.queryBlock = function (vars, ep, block, order, direction, 
     return query;
 };
 
-// Creates a global variable named with de value of varName and containing value
+// Creates a global variable named with the value of varName and containing value
 // it also adds a watcher to the stage
 SpriteMorph.prototype.createResultVar = function (varName, value){
     let ide = world.children[0];
@@ -1150,8 +1143,6 @@ Query.prototype.prepareRequest = function () {
 
     queryString += '\nWHERE {\n';
     queryString += this.getAllTriples();
-    //queryString += this.endpoint.getLanguageFilters(this.vars.contents);
-    //queryString += 'SERVICE wikibase:label {bd:serviceParam wikibase:language "' + this.endpoint.language + ',en"}} \n';
     queryString += '}\n'
     if(this.isOrdered())
         queryString += 'ORDER BY ' + this.direction + '(' + this.order + ') \n';
